@@ -1,0 +1,413 @@
+﻿@model IdeioMarketing.Areas.Admin.Models.PaymentPlanPageVm
+@{
+    ViewData["Title"] = "Ödeme Planları";
+}
+
+<link rel="stylesheet" href="~/css/admin-crud.css" asp-append-version="true" />
+
+<div class="container-fluid admin-crud-page px-4">
+    <div id="pageAlertArea"></div>
+
+    <div class="admin-hero mb-4">
+        <div class="section-kicker">ADMIN PANEL</div>
+        <h2>Ödeme Planı Yönetimi</h2>
+        <p>Ödeme planlarını tek ekranda, sayfa yenilenmeden ekleyebilir, güncelleyebilir ve silebilirsin.</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-4">
+            <div class="admin-card sticky-card">
+                <div class="card-body">
+                    <div class="section-kicker">FORM</div>
+                    <div class="section-title" id="formTitle">Yeni Ödeme Planı Ekle</div>
+                    <div class="section-subtitle">Plan adı, taksit sayısı ve indirim oranını girerek kayıt oluşturabilirsin.</div>
+
+                    <form id="paymentPlanForm">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" id="paymentPlanId" name="Id" value="0" />
+
+                        <div id="formErrorBox" class="alert alert-danger d-none"></div>
+
+                        <div class="mb-3">
+                            <label for="paymentPlanName" class="form-label">Ödeme Planı Adı</label>
+                            <input id="paymentPlanName"
+                                   name="Name"
+                                   class="form-control"
+                                   placeholder="Örn: 3 Taksit" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="paymentPlanNumberOfInstallments" class="form-label">Taksit Sayısı</label>
+                            <input id="paymentPlanNumberOfInstallments"
+                                   name="NumberOfInstallments"
+                                   type="number"
+                                   min="1"
+                                   max="120"
+                                   class="form-control"
+                                   placeholder="Örn: 3" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="paymentPlanDiscountRate" class="form-label">İndirim Oranı (%)</label>
+                            <input id="paymentPlanDiscountRate"
+                                   name="DiscountRate"
+                                   type="number"
+                                   min="0"
+                                   max="100"
+                                   class="form-control"
+                                   placeholder="Örn: 10" />
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" id="btnSave" class="btn btn-primary flex-fill">Kaydet</button>
+                            <button type="button" id="btnCancelEdit" class="btn btn-light flex-fill">Temizle</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-8">
+            <div class="admin-card">
+                <div class="card-body">
+                    <div class="top-inline">
+                        <div>
+                            <div class="section-title mb-0">Mevcut Ödeme Planları</div>
+                            <div class="section-subtitle mb-0">Kayıtları sağ taraftan yönetebilirsin.</div>
+                        </div>
+                        <div class="count-pill"><span id="paymentPlanCount">@Model.Items.Count</span> kayıt</div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-modern">
+                            <thead>
+                                <tr>
+                                    <th>Plan</th>
+                                    <th>Taksit</th>
+                                    <th>İndirim Oranı</th>
+                                    <th>Durum</th>
+                                    <th class="text-end">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentPlanTableBody">
+                                @if (!Model.Items.Any())
+                                {
+                                    <tr id="emptyRow">
+                                        <td colspan="5">
+                                            <div class="empty-state">
+                                                <h5>Henüz ödeme planı eklenmemiş</h5>
+                                                <div>Sol taraftaki formdan ilk kaydı oluşturabilirsin.</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in Model.Items)
+                                    {
+                                        <tr id="row-@item.Id" data-row="1">
+                                            <td>
+                                                <div class="entity-title">@item.Name</div>
+                                                <div class="entity-meta">ID: @item.Id</div>
+                                            </td>
+                                            <td>
+                                                <span class="badge-soft-dark">@item.NumberOfInstallments taksit</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge-soft">@item.DiscountRate%</span>
+                                            </td>
+                                            <td>
+                                                @if (item.DiscountRate > 0)
+                                                {
+                                                    <span class="status-ok">İndirimli</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="status-passive">Standart</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="inline-actions justify-content-end">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-primary btn-payment-plan-edit"
+                                                            data-id="@item.Id">
+                                                        Düzenle
+                                                    </button>
+
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger btn-payment-plan-delete"
+                                                            data-id="@item.Id">
+                                                        Sil
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts
+{
+    <script>
+        (function() {
+            const form = $('#paymentPlanForm');
+            const token = form.find('input[name="__RequestVerificationToken"]').val();
+            const tableBody = $('#paymentPlanTableBody');
+            const pageAlertArea = $('#pageAlertArea');
+            const formErrorBox = $('#formErrorBox');
+            const formTitle = $('#formTitle');
+            const btnSave = $('#btnSave');
+            const btnCancelEdit = $('#btnCancelEdit');
+            const paymentPlanCount = $('#paymentPlanCount');
+
+            function escapeHtml(text) {
+                if (text === null || text === undefined) return '';
+                return String(text)
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#39;');
+            }
+
+            function showPageAlert(type, message) {
+                const html = `
+                        <div class="alert alert-${type} shadow-sm border-0 mb-4">
+                            ${escapeHtml(message)}
+                        </div>
+                    `;
+                pageAlertArea.html(html);
+
+                setTimeout(function() {
+                    pageAlertArea.find('.alert').fadeOut(300, function() {
+                        $(this).remove();
+                    });
+                }, 3000);
+            }
+
+            function showFormErrors(errors) {
+                if (!errors || !errors.length) {
+                    formErrorBox.addClass('d-none').html('');
+                    return;
+                }
+
+                const html = `<ul class="mb-0 ps-3">${errors.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+                formErrorBox.removeClass('d-none').html(html);
+            }
+
+            function resetForm() {
+                $('#paymentPlanId').val(0);
+                $('#paymentPlanName').val('');
+                $('#paymentPlanNumberOfInstallments').val(1);
+                $('#paymentPlanDiscountRate').val(0);
+                formTitle.text('Yeni Ödeme Planı Ekle');
+                btnSave.text('Kaydet');
+                showFormErrors([]);
+            }
+
+            function updateCount() {
+                const rowCount = tableBody.find('tr[data-row="1"]').length;
+                paymentPlanCount.text(rowCount);
+            }
+
+            function ensureEmptyState() {
+                const rowCount = tableBody.find('tr[data-row="1"]').length;
+
+                if (rowCount === 0) {
+                    if ($('#emptyRow').length === 0) {
+                        tableBody.html(`
+                                <tr id="emptyRow">
+                                    <td colspan="5">
+                                        <div class="empty-state">
+                                            <h5>Henüz ödeme planı eklenmemiş</h5>
+                                            <div>Sol taraftaki formdan ilk kaydı oluşturabilirsin.</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `);
+                    }
+                } else {
+                    $('#emptyRow').remove();
+                }
+
+                updateCount();
+            }
+
+            function buildStatus(discountRate) {
+                return discountRate > 0
+                    ? '<span class="status-ok">İndirimli</span>'
+                    : '<span class="status-passive">Standart</span>';
+            }
+
+            function buildRow(item) {
+                return `
+                        <tr id="row-${item.id}" data-row="1">
+                            <td>
+                                <div class="entity-title">${escapeHtml(item.name)}</div>
+                                <div class="entity-meta">ID: ${item.id}</div>
+                            </td>
+                            <td>
+                                <span class="badge-soft-dark">${item.numberOfInstallments} taksit</span>
+                            </td>
+                            <td>
+                                <span class="badge-soft">${item.discountRate}%</span>
+                            </td>
+                            <td>
+                                ${buildStatus(item.discountRate)}
+                            </td>
+                            <td class="text-end">
+                                <div class="inline-actions justify-content-end">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-primary btn-payment-plan-edit"
+                                            data-id="${item.id}">
+                                        Düzenle
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger btn-payment-plan-delete"
+                                            data-id="${item.id}">
+                                        Sil
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+            }
+
+            form.on('submit', function(e) {
+                e.preventDefault();
+
+                showFormErrors([]);
+                btnSave.prop('disabled', true);
+
+                $.ajax({
+                    url: '@Url.Action("SaveAjax", "PaymentPlans", new { area = "Admin" })',
+                    type: 'POST',
+                    data: {
+                        __RequestVerificationToken: token,
+                        Id: $('#paymentPlanId').val(),
+                        Name: $('#paymentPlanName').val(),
+                        NumberOfInstallments: $('#paymentPlanNumberOfInstallments').val(),
+                        DiscountRate: $('#paymentPlanDiscountRate').val()
+                    },
+                    success: function(response) {
+                        if (!response.success) {
+                            showFormErrors(response.errors || [response.message || 'İşlem başarısız oldu.']);
+                            return;
+                        }
+
+                        $('#emptyRow').remove();
+
+                        const rowHtml = buildRow(response.item);
+                        const existingRow = $('#row-' + response.item.id);
+
+                        if (existingRow.length) {
+                            existingRow.replaceWith(rowHtml);
+                        } else {
+                            tableBody.prepend(rowHtml);
+                        }
+
+                        resetForm();
+                        ensureEmptyState();
+                        showPageAlert('success', response.message);
+                    },
+                    error: function() {
+                        showPageAlert('danger', 'İşlem sırasında beklenmeyen bir hata oluştu.');
+                    },
+                    complete: function() {
+                        btnSave.prop('disabled', false);
+                    }
+                });
+            });
+
+            btnCancelEdit.on('click', function() {
+                resetForm();
+            });
+
+            $(document).on('click', '.btn-payment-plan-edit', function() {
+                const id = $(this).data('id');
+
+                $.ajax({
+                    url: '@Url.Action("GetById", "PaymentPlans", new { area = "Admin" })',
+                    type: 'GET',
+                    data: { id: id },
+                    success: function(response) {
+                        if (!response.success) {
+                            showPageAlert('danger', response.message || 'Kayıt alınamadı.');
+                            return;
+                        }
+
+                        $('#paymentPlanId').val(response.item.id);
+                        $('#paymentPlanName').val(response.item.name);
+                        $('#paymentPlanNumberOfInstallments').val(response.item.numberOfInstallments);
+                        $('#paymentPlanDiscountRate').val(response.item.discountRate);
+                        formTitle.text('Ödeme Planı Düzenle');
+                        btnSave.text('Güncelle');
+                        showFormErrors([]);
+
+                        $('html, body').animate({
+                            scrollTop: form.offset().top - 120
+                        }, 300);
+                    },
+                    error: function() {
+                        showPageAlert('danger', 'Kayıt bilgileri alınırken hata oluştu.');
+                    }
+                });
+            });
+
+            $(document).on('click', '.btn-payment-plan-delete', function() {
+                const id = $(this).data('id');
+
+                if (!confirm('Bu ödeme planını silmek istediğine emin misin?')) {
+                    return;
+                }
+
+                $.ajax({
+                    url: '@Url.Action("DeleteAjax", "PaymentPlans", new { area = "Admin" })',
+                    type: 'POST',
+                    data: {
+                        __RequestVerificationToken: token,
+                        id: id
+                    },
+                    success: function(response) {
+                        if (!response.success) {
+                            showPageAlert('danger', response.message || 'Silme işlemi başarısız oldu.');
+                            return;
+                        }
+
+                        $('#row-' + response.id).remove();
+
+                        const currentEditId = Number($('#paymentPlanId').val() || 0);
+                        if (currentEditId === response.id) {
+                            resetForm();
+                        }
+
+                        ensureEmptyState();
+                        showPageAlert('success', response.message);
+                    },
+                    error: function() {
+                        showPageAlert('danger', 'Silme sırasında beklenmeyen bir hata oluştu.');
+                    }
+                });
+            });
+
+            ensureEmptyState();
+
+            if (!$('#paymentPlanNumberOfInstallments').val()) {
+                $('#paymentPlanNumberOfInstallments').val(1);
+            }
+
+            if (!$('#paymentPlanDiscountRate').val()) {
+                $('#paymentPlanDiscountRate').val(0);
+            }
+        })();
+    </script>
+}

@@ -1,0 +1,687 @@
+﻿@model IdeioMarketing.Areas.Admin.Models.OfferAdminDocumentVm
+@using System.Globalization
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Teklif Belgesi";
+    var trCulture = new CultureInfo("tr-TR");
+    var offer = Model.Offer;
+
+    var jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    var items = offer.Items
+        .OrderBy(x => x.CategoryName)
+        .ThenBy(x => x.Name)
+        .Select(x => new
+        {
+            itemType = x.ItemType,
+            id = x.SourceItemId,
+            categoryId = x.CategoryId,
+            categoryName = x.CategoryName,
+            name = x.Name,
+            rawName = x.RawName,
+            unitPrice = x.UnitPrice,
+            quantity = x.Quantity,
+            amount = x.TotalPrice,
+            isOneTime = x.IsOneTime,
+            isPiece = x.IsPiece
+        })
+        .ToList();
+
+    var installments = offer.Installments
+        .OrderBy(x => x.MonthNo)
+        .Select(x => new
+        {
+            month = x.MonthNo,
+            gross = x.GrossAmount,
+            net = x.NetAmount
+        })
+        .ToList();
+
+    var clientData = new
+    {
+        offerId = offer.Id,
+        offerNo = offer.OfferNo,
+        customerName = offer.CustomerName,
+        email = offer.Email,
+        phone = offer.Phone,
+        taxOffice = offer.TaxOffice,
+        taxNumber = offer.TaxNumber,
+        notificationAddress = offer.NotificationAddress,
+        paymentPlanId = offer.PaymentPlanId,
+        paymentPlanName = offer.PaymentPlanName,
+        paymentPlanInstallmentCount = offer.PaymentPlanInstallmentCount,
+        discountRate = offer.DiscountRate,
+        discountAmount = offer.DiscountAmount,
+        grossTotal = offer.GrossTotal,
+        netTotal = offer.NetTotal,
+        documentType = offer.DocumentType,
+        documentTypeText = Model.DocumentTypeText,
+        createdAt = offer.CreatedAt.ToString("dd.MM.yyyy"),
+        autoDownload = Model.AutoDownload,
+        items,
+        installments
+    };
+
+    var clientJson = JsonSerializer.Serialize(clientData, jsonOptions);
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-offers.css" asp-append-version="true" />
+}
+
+<div class="admin-offers-page">
+    <div class="admin-page-head detail-head">
+        <div>
+            <h1>Teklif Belgesi</h1>
+            <p>@offer.OfferNo · @Model.DocumentTypeText</p>
+        </div>
+
+        <div class="detail-top-actions">
+            <a asp-area="Admin" asp-controller="Offers" asp-action="Detail" asp-route-id="@offer.Id" class="btn-secondary-admin">Detaya Dön</a>
+            <button type="button" id="adminDocumentDownloadBtn" class="btn-pdf">PDF İndir</button>
+        </div>
+    </div>
+
+    <div class="admin-document-shell">
+        <div class="billing-preview-shell">
+            <div class="billing-preview-toolbar">
+                <span>Belge Önizleme</span>
+            </div>
+
+            <div class="billing-preview-stage">
+                <div id="adminDocumentPreviewArea"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.adminOfferDocumentData = @Html.Raw(clientJson);
+        window.offerPdfLogoUrl = "@Url.Content("~/img/logo.png")";
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        (function() {
+        const data = window.adminOfferDocumentData || {};
+        const offerPdfLogoUrl = window.offerPdfLogoUrl || "/img/logo.png";
+        const previewArea = document.getElementById("adminDocumentPreviewArea");
+        const downloadBtn = document.getElementById("adminDocumentDownloadBtn");
+
+        const currencyFormatter = new Intl.NumberFormat("tr-TR", {
+        style: "currency",
+        currency: "TRY",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+        });
+
+        let isDownloading = false;
+
+        function formatCurrency(value) {
+        const n = Number(value || 0);
+        return currencyFormatter.format(n);
+        }
+
+        function escapeHtml(text) {
+        return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+        }
+
+        function escapeAttr(text) {
+        return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+        }
+
+        function chunkArray(array, size) {
+        if (!Array.isArray(array) || !array.length) return [[]];
+        const result = [];
+        for (let i = 0; i < array.length; i += size) {
+        result.push(array.slice(i, i + size));
+        }
+        return result.length ? result : [[]];
+        }
+
+        async function waitForImages(rootElement) {
+        const images = Array.from(rootElement.querySelectorAll("img"));
+        await Promise.all(images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        });
+        }));
+        }
+
+        function displayValue(value, fallback = "................................................") {
+        return value && String(value).trim() ? escapeHtml(String(value).trim()) : fallback;
+        }
+
+        function buildItemsTableRows(items, startIndex = 0) {
+        if (!items.length) {
+        return `
+        <tr>
+        <td colspan="4">Herhangi bir hizmet seçilmedi.</td>
+        </tr>
+        `;
+        }
+
+        return items.map((item, index) => `
+        <tr>
+        <td>${startIndex + index + 1}</td>
+        <td>${escapeHtml(item.rawName || item.name)}</td>
+        <td>${item.quantity || 1}</td>
+        <td>${formatCurrency(item.amount)}</td>
+        </tr>
+        `).join("");
+        }
+
+        function buildInstallmentRows(installments) {
+        if (!installments.length) {
+        return `
+        <tr>
+        <td colspan="2">Taksit bilgisi bulunmuyor.</td>
+        </tr>
+        `;
+        }
+
+        return installments.map(x => `
+        <tr>
+        <td>${x.month}. Ay</td>
+        <td>${formatCurrency(x.net)}</td>
+        </tr>
+        `).join("");
+        }
+
+        function buildPdfPageHeader(docLabel) {
+        return `
+        <div class="pdf-page-header">
+        <div class="pdf-page-brand">
+        <div class="pdf-logo-box">
+        <img src="${escapeAttr(offerPdfLogoUrl)}"
+        alt="Ideio Creative Logo"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+        <div class="pdf-logo-fallback">ID</div>
+        </div>
+        <div>
+        <div class="pdf-brand-title">Ideio Creative</div>
+        <div class="pdf-brand-subtitle">${escapeHtml(docLabel)}</div>
+        </div>
+        </div>
+        <div class="pdf-page-meta">
+        <div><strong>Tarih:</strong> ${escapeHtml(data.createdAt || "")}</div>
+        </div>
+        </div>
+        `;
+        }
+
+        function buildPdfPage(bodyHtml, pageNo, totalPages, docLabel) {
+        return `
+        <section class="document-preview-page">
+        ${buildPdfPageHeader(docLabel)}
+        <div class="pdf-page-content">
+        ${bodyHtml}
+        </div>
+        <div class="pdf-page-footer">
+        <span>${escapeHtml(docLabel)}</span>
+        <span>Sayfa ${pageNo} / ${totalPages}</span>
+        </div>
+        </section>
+        `;
+        }
+
+        function buildProposalPages() {
+        const pages = [];
+        const itemChunks = chunkArray(data.items || [], 12);
+        const installmentChunks = chunkArray(data.installments || [], 12);
+
+        const firstItemChunk = itemChunks[0] || [];
+
+        pages.push(`
+        <div class="doc-title">Hizmet Ön Protokolü ve Teklif Formu</div>
+        <div class="doc-subtitle">
+        Sayın ${displayValue(data.customerName, "Müşteri")} için oluşturulan teklif önizlemesi.
+        </div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Müşteri Bilgileri</div>
+        <div class="doc-info-grid">
+        <div class="doc-info-item">
+        <span>Müşteri / Firma Adı</span>
+        <strong>${displayValue(data.customerName)}</strong>
+        </div>
+        <div class="doc-info-item">
+        <span>E-Posta</span>
+        <strong>${displayValue(data.email)}</strong>
+        </div>
+        <div class="doc-info-item">
+        <span>Telefon</span>
+        <strong>${displayValue(data.phone)}</strong>
+        </div>
+        <div class="doc-info-item">
+        <span>Vergi Dairesi / Vergi No</span>
+        <strong>${displayValue(data.taxOffice)} / ${displayValue(data.taxNumber)}</strong>
+        </div>
+        <div class="doc-info-item full">
+        <span>Tebligat Adresi</span>
+        <strong>${displayValue(data.notificationAddress)}</strong>
+        </div>
+        </div>
+        </div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Seçilen Hizmet Kalemleri</div>
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>#</th>
+        <th>Hizmet</th>
+        <th>Adet</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildItemsTableRows(firstItemChunk, 0)}
+        </tbody>
+        </table>
+        </div>
+        </div>
+        `);
+
+        if (itemChunks.length > 1) {
+        for (let i = 1; i < itemChunks.length; i++) {
+        pages.push(`
+        <div class="doc-title">Seçilen Hizmet Kalemleri</div>
+        <div class="doc-subtitle">Devam eden hizmet listesi</div>
+
+        <div class="doc-section">
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>#</th>
+        <th>Hizmet</th>
+        <th>Adet</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildItemsTableRows(itemChunks[i], i * 12)}
+        </tbody>
+        </table>
+        </div>
+        </div>
+        `);
+        }
+        }
+
+        const firstInstallmentChunk = installmentChunks[0] || [];
+        pages.push(`
+        <div class="doc-title">Ödeme Özeti</div>
+        <div class="doc-subtitle">Ücretlendirme ve ödeme planı</div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Ödeme Planı Bilgileri</div>
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <tbody>
+        <tr>
+        <th>Ödeme Planı</th>
+        <td>${escapeHtml(data.paymentPlanName || "-")}</td>
+        </tr>
+        <tr>
+        <th>İndirim Oranı</th>
+        <td>%${Number(data.discountRate || 0).toFixed(2)}</td>
+        </tr>
+        </tbody>
+        </table>
+        </div>
+
+        <div class="doc-total-box">
+        <div class="doc-total-row">
+        <span>Brüt Toplam</span>
+        <strong>${formatCurrency(data.grossTotal)}</strong>
+        </div>
+        <div class="doc-total-row">
+        <span>İndirim</span>
+        <strong>${formatCurrency(data.discountAmount)}</strong>
+        </div>
+        <div class="doc-total-row net">
+        <span>Net Toplam</span>
+        <strong>${formatCurrency(data.netTotal)}</strong>
+        </div>
+        </div>
+        </div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Taksit Dağılımı</div>
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>Dönem</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildInstallmentRows(firstInstallmentChunk)}
+        </tbody>
+        </table>
+        </div>
+        </div>
+
+        <div class="doc-note">
+        Bu belge teklif niteliğindedir. Nihai koşullar resmi sözleşme ile kesinleşir.
+        </div>
+        `);
+
+        if (installmentChunks.length > 1) {
+        for (let i = 1; i < installmentChunks.length; i++) {
+        pages.push(`
+        <div class="doc-title">Taksit Dağılımı</div>
+        <div class="doc-subtitle">Devam eden ödeme planı detayları</div>
+
+        <div class="doc-section">
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>Dönem</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildInstallmentRows(installmentChunks[i])}
+        </tbody>
+        </table>
+        </div>
+        </div>
+        `);
+        }
+        }
+
+        return pages;
+        }
+
+        function buildContractPages() {
+        const pages = [];
+        const itemChunks = chunkArray(data.items || [], 14);
+        const installmentChunks = chunkArray(data.installments || [], 12);
+
+        pages.push(`
+        <div class="doc-title">Hizmet Sözleşmesi</div>
+        <div class="doc-subtitle">
+        İşbu sözleşme Ideio Creative ile hizmet alan müşteri arasında düzenlenmiştir.
+        </div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Taraf Bilgileri</div>
+        <div class="doc-info-grid">
+        <div class="doc-info-item">
+        <span>Hizmet Veren</span>
+        <strong>Ideio Creative</strong>
+        </div>
+        <div class="doc-info-item">
+        <span>Hizmet Alan</span>
+        <strong>${displayValue(data.customerName, "Müşteri / Firma")}</strong>
+        </div>
+        <div class="doc-info-item">
+        <span>E-Posta / Telefon</span>
+        <strong>${displayValue(data.email)} / ${displayValue(data.phone)}</strong>
+        </div>
+        <div class="doc-info-item">
+        <span>Vergi Dairesi / Vergi No</span>
+        <strong>${displayValue(data.taxOffice)} / ${displayValue(data.taxNumber)}</strong>
+        </div>
+        <div class="doc-info-item full">
+        <span>Tebligat Adresi</span>
+        <strong>${displayValue(data.notificationAddress)}</strong>
+        </div>
+        </div>
+        </div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Sözleşme Kapsamı</div>
+        <ol class="doc-list">
+        <li>Hizmet Veren, aşağıda listelenen hizmetleri Hizmet Alan’a sunacaktır.</li>
+        <li>Hizmet kapsamı, seçilen paketler ve alt paketler ile sınırlıdır.</li>
+        <li>Taraflar, revize ve onay süreçlerinde yazılı iletişimi esas alacaktır.</li>
+        <li>Ödeme, seçilen ödeme planına ve indirim şartlarına göre yapılacaktır.</li>
+        </ol>
+        </div>
+        `);
+
+        itemChunks.forEach((chunk, index) => {
+        pages.push(`
+        <div class="doc-title">Seçilen Hizmetler</div>
+        <div class="doc-subtitle">${index === 0 ? "Sözleşme kapsamına dahil hizmetler" : "Devam eden hizmet listesi"}</div>
+
+        <div class="doc-section">
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>#</th>
+        <th>Hizmet</th>
+        <th>Adet</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildItemsTableRows(chunk, index * 14)}
+        </tbody>
+        </table>
+        </div>
+        </div>
+        `);
+        });
+
+        const firstInstallmentChunk = installmentChunks[0] || [];
+        pages.push(`
+        <div class="doc-title">Ücretlendirme ve Ödeme Planı</div>
+        <div class="doc-subtitle">Sözleşmeye ait ödeme özeti</div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Ödeme Bilgileri</div>
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <tbody>
+        <tr>
+        <th>Ödeme Planı</th>
+        <td>${escapeHtml(data.paymentPlanName || "-")}</td>
+        </tr>
+        <tr>
+        <th>İndirim Oranı</th>
+        <td>%${Number(data.discountRate || 0).toFixed(2)}</td>
+        </tr>
+        <tr>
+        <th>Brüt Toplam</th>
+        <td>${formatCurrency(data.grossTotal)}</td>
+        </tr>
+        <tr>
+        <th>İndirim Tutarı</th>
+        <td>${formatCurrency(data.discountAmount)}</td>
+        </tr>
+        <tr>
+        <th>Net Toplam</th>
+        <td>${formatCurrency(data.netTotal)}</td>
+        </tr>
+        </tbody>
+        </table>
+        </div>
+        </div>
+
+        <div class="doc-section">
+        <div class="doc-section-title">Taksit Planı</div>
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>Dönem</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildInstallmentRows(firstInstallmentChunk)}
+        </tbody>
+        </table>
+        </div>
+        </div>
+        `);
+
+        if (installmentChunks.length > 1) {
+        for (let i = 1; i < installmentChunks.length; i++) {
+        pages.push(`
+        <div class="doc-title">Taksit Planı</div>
+        <div class="doc-subtitle">Devam eden taksit bilgileri</div>
+
+        <div class="doc-section">
+        <div class="doc-table-wrap">
+        <table class="doc-table">
+        <thead>
+        <tr>
+        <th>Dönem</th>
+        <th>Tutar</th>
+        </tr>
+        </thead>
+        <tbody>
+        ${buildInstallmentRows(installmentChunks[i])}
+        </tbody>
+        </table>
+        </div>
+        </div>
+        `);
+        }
+        }
+
+        pages.push(`
+        <div class="doc-title">Hükümler ve İmzalar</div>
+        <div class="doc-subtitle">Tarafların genel mutabakat bölümü</div>
+
+        <div class="doc-note">
+        Gizlilik, fesih, mücbir sebep ve uyuşmazlık çözümü gibi detay maddeler nihai sözleşme metninde ayrıca düzenlenebilir.
+        </div>
+
+        <div class="doc-signatures">
+        <div class="doc-sign-box">Hizmet Veren</div>
+        <div class="doc-sign-box">${displayValue(data.customerName, "Hizmet Alan")}</div>
+        </div>
+        `);
+
+        return pages;
+        }
+
+        function renderPreview() {
+        const rawPages = data.documentType === "contract"
+        ? buildContractPages()
+        : buildProposalPages();
+
+        const finalPages = rawPages.map((body, index) =>
+        buildPdfPage(body, index + 1, rawPages.length, data.documentTypeText || "Belge")
+        );
+
+        previewArea.innerHTML = `<div class="document-preview-pages">${finalPages.join("")}</div>`;
+        }
+
+        async function downloadPdf() {
+        if (isDownloading) return;
+
+        const previewPages = previewArea?.querySelectorAll(".document-preview-page");
+        if (!previewPages || !previewPages.length) return;
+
+        if (typeof window.html2canvas === "undefined" || typeof window.jspdf === "undefined") {
+        alert("PDF oluşturma kütüphaneleri yüklenemedi.");
+        return;
+        }
+
+        isDownloading = true;
+        const originalText = downloadBtn.textContent;
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = "PDF hazırlanıyor...";
+
+        try {
+        await waitForImages(previewArea);
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true
+        });
+
+        const pageWidth = 210;
+        const pageHeight = 297;
+
+        for (let i = 0; i < previewPages.length; i++) {
+        const canvas = await window.html2canvas(previewPages[i], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: -window.scrollY
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.98);
+
+        if (i > 0) {
+        pdf.addPage();
+        }
+
+        pdf.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight);
+        }
+
+        const safeName = (data.customerName || "teklif")
+        .toLowerCase()
+        .replaceAll("ı", "i")
+        .replaceAll("ğ", "g")
+        .replaceAll("ü", "u")
+        .replaceAll("ş", "s")
+        .replaceAll("ö", "o")
+        .replaceAll("ç", "c")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+        const fileName = `${safeName || "teklif"}-${data.documentType === "contract" ? "hizmet-sozlesmesi" : "on-protokol"}-${data.offerNo || data.offerId}.pdf`;
+
+        pdf.save(fileName);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        } catch (error) {
+        console.error(error);
+        alert("PDF oluşturulurken bir hata oluştu.");
+        } finally {
+        isDownloading = false;
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = originalText;
+        }
+        }
+
+        renderPreview();
+
+        downloadBtn.onclick = async function(e) {
+        e.preventDefault();
+        await downloadPdf();
+        };
+
+        if (data.autoDownload) {
+        setTimeout(async function() {
+        await downloadPdf();
+        }, 400);
+        }
+        })();
+    </script>
+}

@@ -1,0 +1,649 @@
+﻿.admin-offers-page {
+    padding: 24px;
+}
+
+.admin-page-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 20px;
+}
+
+    .admin-page-head h1 {
+        margin: 0 0 6px;
+        font-size: 30px;
+        font-weight: 800;
+        color: #162033;
+    }
+
+    .admin-page-head p {
+        margin: 0;
+        color: #6c7688;
+        font-size: 14px;
+    }
+
+.admin-alert {
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 18px;
+}
+
+    .admin-alert.success {
+        background: #ecfdf3;
+        border: 1px solid #ccefd8;
+        color: #166534;
+    }
+
+    .admin-alert.error {
+        background: #fff1f2;
+        border: 1px solid #fecdd3;
+        color: #be123c;
+    }
+
+.admin-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.summary-card {
+    background: #fff;
+    border: 1px solid #e7edf5;
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 8px 22px rgba(17, 24, 39, 0.04);
+}
+
+    .summary-card span {
+        display: block;
+        font-size: 13px;
+        color: #708097;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .summary-card strong {
+        display: block;
+        font-size: 24px;
+        color: #182234;
+        font-weight: 800;
+    }
+
+.admin-filter-box,
+.admin-table-card,
+.detail-card {
+    background: #fff;
+    border: 1px solid #e7edf5;
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 8px 22px rgba(17, 24, 39, 0.04);
+    margin-bottom: 20px;
+}
+
+.admin-filter-form .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.admin-filter-form label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #41506c;
+    margin-bottom: 7px;
+}
+
+.admin-filter-form input,
+.admin-filter-form select {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid #dae3ef;
+    border-radius: 12px;
+    padding: 10px 12px;
+    box-shadow: none;
+    outline: none;
+    background: #fff;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.btn-primary-admin,
+.btn-secondary-admin,
+.btn-detail,
+.btn-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    border: 0;
+    transition: 0.2s ease;
+}
+
+.btn-primary-admin {
+    background: #1f3f75;
+    color: #fff;
+}
+
+    .btn-primary-admin:hover {
+        background: #19345f;
+        color: #fff;
+    }
+
+.btn-secondary-admin {
+    background: #eef2f7;
+    color: #22314d;
+}
+
+    .btn-secondary-admin:hover {
+        background: #e3e9f1;
+        color: #22314d;
+    }
+
+.btn-detail {
+    background: #edf4ff;
+    color: #1d4ed8;
+}
+
+.btn-delete {
+    background: #fff1f2;
+    color: #be123c;
+}
+
+.action-buttons {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+    .action-buttons form {
+        margin: 0;
+    }
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+    .admin-table th,
+    .admin-table td {
+        padding: 14px 12px;
+        border-bottom: 1px solid #edf2f7;
+        text-align: left;
+        vertical-align: top;
+        font-size: 14px;
+    }
+
+    .admin-table th {
+        font-size: 13px;
+        font-weight: 800;
+        color: #44536d;
+        background: #f8fafc;
+    }
+
+.cell-stack {
+    display: grid;
+    gap: 4px;
+}
+
+    .cell-stack strong {
+        color: #1a2436;
+    }
+
+    .cell-stack span {
+        color: #6e7b91;
+        font-size: 13px;
+    }
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: #eefbf3;
+    color: #137146;
+    border: 1px solid #d3f0de;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.text-end {
+    text-align: end !important;
+}
+
+.empty-admin-box {
+    padding: 24px;
+    border: 1px dashed #d8e0ea;
+    border-radius: 14px;
+    text-align: center;
+    color: #6d7890;
+    font-weight: 700;
+    background: #fafbfd;
+}
+
+.detail-head {
+    margin-bottom: 22px;
+}
+
+.detail-top-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+    .detail-top-actions form {
+        margin: 0;
+    }
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.detail-card h3 {
+    margin: 0 0 16px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1a2436;
+}
+
+.detail-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.detail-info-item {
+    border: 1px solid #edf2f7;
+    border-radius: 14px;
+    background: #fafbfd;
+    padding: 14px;
+}
+
+    .detail-info-item.full {
+        grid-column: 1 / -1;
+    }
+
+    .detail-info-item span {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        color: #708097;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+    }
+
+    .detail-info-item strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 800;
+        color: #1a2436;
+        white-space: pre-line;
+    }
+
+@media (max-width: 1199.98px) {
+    .admin-filter-form .filter-grid,
+    .admin-summary-cards,
+    .detail-grid,
+    .detail-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .admin-offers-page {
+        padding: 16px;
+    }
+
+    .admin-page-head,
+    .filter-actions,
+    .detail-top-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .admin-filter-form .filter-grid,
+    .admin-summary-cards,
+    .detail-grid,
+    .detail-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+        .action-buttons form,
+        .action-buttons a,
+        .btn-delete,
+        .btn-detail,
+        .btn-primary-admin,
+        .btn-secondary-admin {
+            width: 100%;
+        }
+}
+.btn-pdf {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    border: 0;
+    transition: 0.2s ease;
+    background: #eef4ff;
+    color: #1d4ed8;
+}
+
+    .btn-pdf:hover {
+        background: #dfeafe;
+        color: #1d4ed8;
+    }
+
+.admin-document-shell {
+    margin-top: 18px;
+}
+
+/* document preview ortak stiller */
+.document-preview-pages {
+    display: block;
+}
+
+.document-preview-page {
+    width: 210mm;
+    max-width: 100%;
+    height: 297mm;
+    margin: 0 auto 18px;
+    background: #fff;
+    color: #111827;
+    box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+    border-radius: 8px;
+    padding: 18mm 16mm 16mm;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+}
+
+    .document-preview-page:last-child {
+        margin-bottom: 0;
+        page-break-after: auto;
+        break-after: auto;
+    }
+
+.pdf-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 18px;
+    flex-shrink: 0;
+}
+
+.pdf-page-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pdf-logo-box {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: 0 0 56px;
+}
+
+    .pdf-logo-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+.pdf-logo-fallback {
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 900;
+    color: #111827;
+}
+
+.pdf-brand-title {
+    font-size: 22px;
+    font-weight: 900;
+    color: #111827;
+    letter-spacing: -0.03em;
+}
+
+.pdf-brand-subtitle {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.pdf-page-meta {
+    text-align: right;
+    font-size: 12px;
+    color: #4b5563;
+}
+
+.pdf-page-content {
+    flex: 1;
+    min-height: 0;
+}
+
+.pdf-page-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.doc-title {
+    font-size: 26px;
+    font-weight: 900;
+    color: #111827;
+    margin-bottom: 8px;
+    letter-spacing: -0.03em;
+}
+
+.doc-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 18px;
+}
+
+.doc-section {
+    margin-top: 18px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+    .doc-section:first-of-type {
+        margin-top: 0;
+    }
+
+.doc-section-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 10px;
+}
+
+.doc-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.doc-info-item {
+    padding: 11px 13px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #f9fafb;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+    .doc-info-item.full {
+        grid-column: 1 / -1;
+    }
+
+    .doc-info-item span {
+        display: block;
+        font-size: 11px;
+        font-weight: 800;
+        color: #6b7280;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+
+    .doc-info-item strong {
+        font-size: 14px;
+        color: #111827;
+        font-weight: 700;
+        line-height: 1.5;
+        white-space: pre-line;
+    }
+
+.doc-table-wrap {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.doc-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+    .doc-table th,
+    .doc-table td {
+        border: 1px solid #e5e7eb;
+        padding: 9px 11px;
+        font-size: 12px;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .doc-table th {
+        background: #f3f4f6;
+        font-weight: 800;
+        color: #1f2937;
+    }
+
+.doc-total-box {
+    margin-top: 16px;
+    margin-left: auto;
+    width: 320px;
+    max-width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.doc-total-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+    .doc-total-row:last-child {
+        border-bottom: 0;
+    }
+
+    .doc-total-row span {
+        color: #6b7280;
+        font-weight: 700;
+    }
+
+    .doc-total-row strong {
+        color: #111827;
+        font-weight: 800;
+    }
+
+    .doc-total-row.net {
+        background: #eff6ff;
+    }
+
+        .doc-total-row.net strong {
+            font-size: 18px;
+        }
+
+.doc-list {
+    margin: 0;
+    padding-left: 20px;
+}
+
+    .doc-list li {
+        margin-bottom: 8px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #1f2937;
+    }
+
+.doc-signatures {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+    margin-top: 42px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.doc-sign-box {
+    text-align: center;
+    padding-top: 28px;
+    border-top: 1px solid #111827;
+    font-size: 14px;
+    color: #111827;
+    font-weight: 700;
+}
+
+.doc-note {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.6;
+    margin-top: 16px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}

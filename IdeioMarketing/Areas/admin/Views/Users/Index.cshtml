@@ -1,0 +1,135 @@
+﻿@model IdeioMarketing.Areas.Admin.Models.UserPageVm
+@{
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<link rel="stylesheet" href="~/css/admin-crud.css" asp-append-version="true" />
+
+<div class="container-fluid admin-crud-page px-4">
+    <div class="admin-hero mb-4">
+        <div class="section-kicker">ADMIN PANEL</div>
+        <h2>Kullanıcı Yönetimi</h2>
+        <p>Kullanıcı ekleme, düzenleme ve silme işlemlerini aynı ekranda yönetebilirsin.</p>
+    </div>
+
+    @if (TempData["AdminSuccess"] != null)
+    {
+        <div class="alert alert-success shadow-sm border-0 mb-4">@TempData["AdminSuccess"]</div>
+    }
+
+    @if (TempData["AdminError"] != null)
+    {
+        <div class="alert alert-danger shadow-sm border-0 mb-4">@TempData["AdminError"]</div>
+    }
+
+    <div class="row g-4">
+        <div class="col-xl-4">
+            <div class="admin-card sticky-card">
+                <div class="card-body">
+                    <div class="section-kicker">FORM</div>
+                    <div class="section-title">@(Model.Form.Id == 0 ? "Yeni Kullanıcı Ekle" : "Kullanıcı Düzenle")</div>
+                    <div class="section-subtitle">Giriş için kullanılacak kullanıcı bilgilerini buradan yönetebilirsin.</div>
+
+                    <form asp-area="Admin" asp-controller="Users" asp-action="Save" method="post">
+                        @Html.AntiForgeryToken()
+                        <input asp-for="Form.Id" type="hidden" />
+
+                        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Username" class="form-label"></label>
+                            <input asp-for="Form.Username" class="form-control" placeholder="Kullanıcı adı giriniz" />
+                            <span asp-validation-for="Form.Username" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Password" class="form-label"></label>
+                            <input asp-for="Form.Password" class="form-control" type="password" placeholder="Şifre giriniz" />
+                            <span asp-validation-for="Form.Password" class="text-danger small"></span>
+                        </div>
+
+                        <div class="helper-note">
+                            Not: Mevcut entity yapın düz metin şifre saklıyor. Canlı kullanımda hash yapısına geçirmen daha doğru olur.
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary flex-fill">
+                                @(Model.Form.Id == 0 ? "Kaydet" : "Güncelle")
+                            </button>
+                            <a asp-area="Admin" asp-controller="Users" asp-action="Index" class="btn btn-light flex-fill">Temizle</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-8">
+            <div class="admin-card">
+                <div class="card-body">
+                    <div class="top-inline">
+                        <div>
+                            <div class="section-title mb-0">Mevcut Kullanıcılar</div>
+                            <div class="section-subtitle mb-0">Tüm kullanıcı kayıtları burada listelenir.</div>
+                        </div>
+                        <div class="count-pill">@Model.Items.Count kayıt</div>
+                    </div>
+
+                    @if (!Model.Items.Any())
+                    {
+                        <div class="empty-state">
+                            <h5>Henüz kullanıcı kaydı yok</h5>
+                            <div>Sol taraftaki formdan ilk kullanıcıyı ekleyebilirsin.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-modern">
+                                <thead>
+                                    <tr>
+                                        <th>Kullanıcı Adı</th>
+                                        <th>Durum</th>
+                                        <th class="text-end">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model.Items)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="entity-title">@item.Username</div>
+                                                <div class="entity-meta">ID: @item.Id</div>
+                                            </td>
+                                            <td>
+                                                <span class="status-ok">Aktif Kayıt</span>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="inline-actions justify-content-end">
+                                                    <a asp-area="Admin"
+                                                           asp-controller="Users"
+                                                           asp-action="Index"
+                                                           asp-route-editId="@item.Id"
+                                                           class="btn btn-sm btn-outline-primary">
+                                                        Düzenle
+                                                    </a>
+
+                                                    <form asp-area="Admin" asp-controller="Users" asp-action="Delete" method="post" onsubmit="return confirm('Bu kullanıcıyı silmek istediğine emin misin?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="id" value="@item.Id" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_ValidationScriptsPartial")

@@ -1,0 +1,216 @@
+﻿@model IdeioMarketing.Areas.Admin.Controllers.DashboardVm
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="container-fluid px-4 py-3">
+    <div class="dashboard-hero mb-4">
+        <div>
+            <div class="dashboard-kicker">HOŞ GELDİN</div>
+            <h2 class="dashboard-title">Admin yönetim paneli</h2>
+            <p class="dashboard-text">
+                Kategorileri, paketleri, alt paketleri ve kullanıcıları tek merkezden yönetebilirsin.
+            </p>
+        </div>
+        <div class="dashboard-hero-badge">
+            <i class="bi bi-stars"></i>
+            Modern yönetim deneyimi
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="dashboard-stat-card">
+                <div class="dashboard-stat-icon icon-blue">
+                    <i class="bi bi-tags"></i>
+                </div>
+                <div class="dashboard-stat-content">
+                    <div class="dashboard-stat-label">Toplam Kategori</div>
+                    <div class="dashboard-stat-value">@Model.CategoryCount</div>
+                </div>
+                <a asp-area="Admin" asp-controller="Categories" asp-action="Index" class="dashboard-stat-link">
+                    Yönet <i class="bi bi-arrow-right-short"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="dashboard-stat-card">
+                <div class="dashboard-stat-icon icon-indigo">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="dashboard-stat-content">
+                    <div class="dashboard-stat-label">Toplam Paket</div>
+                    <div class="dashboard-stat-value">@Model.PackageCount</div>
+                </div>
+                <a asp-area="Admin" asp-controller="Packages" asp-action="Index" class="dashboard-stat-link">
+                    Yönet <i class="bi bi-arrow-right-short"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="dashboard-stat-card">
+                <div class="dashboard-stat-icon icon-purple">
+                    <i class="bi bi-box2-heart"></i>
+                </div>
+                <div class="dashboard-stat-content">
+                    <div class="dashboard-stat-label">Toplam Alt Paket</div>
+                    <div class="dashboard-stat-value">@Model.SubPackageCount</div>
+                </div>
+                <a asp-area="Admin" asp-controller="SubPackages" asp-action="Index" class="dashboard-stat-link">
+                    Yönet <i class="bi bi-arrow-right-short"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="dashboard-stat-card">
+                <div class="dashboard-stat-icon icon-emerald">
+                    <i class="bi bi-people"></i>
+                </div>
+                <div class="dashboard-stat-content">
+                    <div class="dashboard-stat-label">Toplam Kullanıcı</div>
+                    <div class="dashboard-stat-value">@Model.UserCount</div>
+                </div>
+                <a asp-area="Admin" asp-controller="Users" asp-action="Index" class="dashboard-stat-link">
+                    Yönet <i class="bi bi-arrow-right-short"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-6">
+            <div class="dashboard-panel">
+                <div class="dashboard-panel-header">
+                    <div>
+                        <div class="dashboard-panel-title">Son Kategoriler</div>
+                        <div class="dashboard-panel-subtitle">Sisteme eklenen son kategori kayıtları</div>
+                    </div>
+                    <a asp-area="Admin" asp-controller="Categories" asp-action="Index" class="btn btn-sm btn-light">Tümünü Gör</a>
+                </div>
+
+                @if (Model.LastCategories.Any())
+                {
+                    <div class="dashboard-mini-list">
+                        @foreach (var item in Model.LastCategories)
+                        {
+                            <div class="dashboard-mini-item">
+                                <div class="dashboard-mini-icon"><i class="bi bi-tag"></i></div>
+                                <div class="dashboard-mini-content">
+                                    <div class="dashboard-mini-title">@item.Title</div>
+                                    <div class="dashboard-mini-desc">@item.Description</div>
+                                </div>
+                                <div class="dashboard-mini-id">#@item.Id</div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="dashboard-empty">Henüz kategori kaydı bulunmuyor.</div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <div class="dashboard-panel">
+                <div class="dashboard-panel-header">
+                    <div>
+                        <div class="dashboard-panel-title">Son Paketler</div>
+                        <div class="dashboard-panel-subtitle">Eklenen en güncel paket kayıtları</div>
+                    </div>
+                    <a asp-area="Admin" asp-controller="Packages" asp-action="Index" class="btn btn-sm btn-light">Tümünü Gör</a>
+                </div>
+
+                @if (Model.LastPackages.Any())
+                {
+                    <div class="dashboard-mini-list">
+                        @foreach (var item in Model.LastPackages)
+                        {
+                            <div class="dashboard-mini-item">
+                                <div class="dashboard-mini-icon"><i class="bi bi-box"></i></div>
+                                <div class="dashboard-mini-content">
+                                    <div class="dashboard-mini-title">@item.Title</div>
+                                    <div class="dashboard-mini-desc">@item.Description</div>
+                                </div>
+                                <div class="dashboard-mini-id">#@item.Id</div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="dashboard-empty">Henüz paket kaydı bulunmuyor.</div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <div class="dashboard-panel">
+                <div class="dashboard-panel-header">
+                    <div>
+                        <div class="dashboard-panel-title">Son Alt Paketler</div>
+                        <div class="dashboard-panel-subtitle">Eklenen en güncel alt paket kayıtları</div>
+                    </div>
+                    <a asp-area="Admin" asp-controller="SubPackages" asp-action="Index" class="btn btn-sm btn-light">Tümünü Gör</a>
+                </div>
+
+                @if (Model.LastSubPackages.Any())
+                {
+                    <div class="dashboard-mini-list">
+                        @foreach (var item in Model.LastSubPackages)
+                        {
+                            <div class="dashboard-mini-item">
+                                <div class="dashboard-mini-icon"><i class="bi bi-box2-heart"></i></div>
+                                <div class="dashboard-mini-content">
+                                    <div class="dashboard-mini-title">@item.Title</div>
+                                    <div class="dashboard-mini-desc">@item.Description</div>
+                                </div>
+                                <div class="dashboard-mini-id">#@item.Id</div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="dashboard-empty">Henüz alt paket kaydı bulunmuyor.</div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+            <div class="dashboard-panel">
+                <div class="dashboard-panel-header">
+                    <div>
+                        <div class="dashboard-panel-title">Son Kullanıcılar</div>
+                        <div class="dashboard-panel-subtitle">Yönetici kullanıcı kayıtları</div>
+                    </div>
+                    <a asp-area="Admin" asp-controller="Users" asp-action="Index" class="btn btn-sm btn-light">Tümünü Gör</a>
+                </div>
+
+                @if (Model.LastUsers.Any())
+                {
+                    <div class="dashboard-mini-list">
+                        @foreach (var item in Model.LastUsers)
+                        {
+                            <div class="dashboard-mini-item">
+                                <div class="dashboard-mini-icon"><i class="bi bi-person"></i></div>
+                                <div class="dashboard-mini-content">
+                                    <div class="dashboard-mini-title">@item.Title</div>
+                                    <div class="dashboard-mini-desc">@item.Description</div>
+                                </div>
+                                <div class="dashboard-mini-id">#@item.Id</div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="dashboard-empty">Henüz kullanıcı kaydı bulunmuyor.</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

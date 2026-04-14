@@ -1,0 +1,158 @@
+﻿@model IdeioMarketing.Areas.Admin.Models.OfferAdminIndexVm
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Teklif Kayıtları";
+    var trCulture = new CultureInfo("tr-TR");
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-offers.css" asp-append-version="true" />
+}
+
+<div class="admin-offers-page">
+  
+
+    @if (TempData["OfferAdminMessage"] != null)
+    {
+        var messageType = (TempData["OfferAdminMessageType"]?.ToString() ?? "success").ToLower();
+        <div class="admin-alert @(messageType == "error" ? "error" : "success")">
+            @TempData["OfferAdminMessage"]
+        </div>
+    }
+
+@*     <div class="admin-summary-cards">
+        <div class="summary-card">
+            <span>Toplam Kayıt</span>
+            <strong>@Model.TotalCount</strong>
+        </div>
+        <div class="summary-card">
+            <span>Brüt Toplam</span>
+            <strong>@Model.TotalGrossAmount.ToString("C2", trCulture)</strong>
+        </div>
+        <div class="summary-card">
+            <span>Net Toplam</span>
+            <strong>@Model.TotalNetAmount.ToString("C2", trCulture)</strong>
+        </div>
+    </div> *@
+
+    <div class="admin-filter-box">
+        <form method="get" class="admin-filter-form">
+            <div class="filter-grid">
+                <div>
+                    <label>Arama</label>
+                    <input type="text" name="q" value="@Model.Q" placeholder="Teklif no, müşteri, e-posta, telefon" />
+                </div>
+
+                <div>
+                    <label>Belge Tipi</label>
+                    <select name="documentType">
+                        <option value="">Tümü</option>
+                        <option value="proposal" selected="@(Model.DocumentType == "proposal")">Ön Protokol</option>
+                        <option value="contract" selected="@(Model.DocumentType == "contract")">Hizmet Sözleşmesi</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Başlangıç Tarihi</label>
+                    <input type="date" name="fromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+                </div>
+
+                <div>
+                    <label>Bitiş Tarihi</label>
+                    <input type="date" name="toDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button type="submit" class="btn-primary-admin">Filtrele</button>
+                <a asp-area="Admin" asp-controller="Offers" asp-action="Index" class="btn-secondary-admin">Temizle</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="admin-table-card">
+        @if (Model.Offers.Any())
+        {
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Teklif No</th>
+                            <th>Müşteri</th>
+                            <th>Belge</th>
+                            <th>Kalem</th>
+                            <th>Taksit</th>
+                            <th>Brüt</th>
+                            <th>Net</th>
+                            <th>Tarih</th>
+                            <th>Durum</th>
+                            <th class="text-end">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Offers)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@item.OfferNo</strong>
+                                </td>
+                                <td>
+                                    <div class="cell-stack">
+                                        <strong>@item.CustomerName</strong>
+                                        @if (!string.IsNullOrWhiteSpace(item.Email))
+                                        {
+                                            <span>@item.Email</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(item.Phone))
+                                        {
+                                            <span>@item.Phone</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>@item.DocumentTypeText</td>
+                                <td>@item.ItemCount</td>
+                                <td>@item.InstallmentCount</td>
+                                <td>@item.GrossTotal.ToString("C2", trCulture)</td>
+                                <td>@item.NetTotal.ToString("C2", trCulture)</td>
+                                <td>@item.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>
+                                    <span class="status-badge">@item.Status</span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-buttons">
+                                        <a asp-area="Admin"
+                                               asp-controller="Offers"
+                                               asp-action="Detail"
+                                               asp-route-id="@item.Id"
+                                               class="btn-detail">
+                                            Detay
+                                        </a>
+
+                                        
+
+                                        <form asp-area="Admin"
+                                              asp-controller="Offers"
+                                              asp-action="Delete"
+                                              asp-route-id="@item.Id"
+                                              method="post"
+                                              onsubmit="return confirm('Bu teklifi silmek istediğine emin misin?');">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn-delete">Sil</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-admin-box">
+                Filtreye uygun teklif kaydı bulunamadı.
+            </div>
+        }
+    </div>
+</div>

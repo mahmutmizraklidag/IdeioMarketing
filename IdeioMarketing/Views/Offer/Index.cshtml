@@ -1,0 +1,477 @@
+﻿@model IdeioMarketing.Models.OfferWizardViewModel
+@using System.Globalization
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Teklif Oluştur";
+    var trCulture = new CultureInfo("tr-TR");
+
+    var jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    var clientData = new
+    {
+        categories = Model.Categories,
+        paymentPlans = Model.PaymentPlans
+    };
+
+    var clientJson = JsonSerializer.Serialize(clientData, jsonOptions);
+
+    var paymentStepIndex = Model.Categories.Count + 1;
+    var billingStepIndex = Model.Categories.Count + 2;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/offer.css" asp-append-version="true" />
+}
+
+<div class="offer-wizard-page">
+    <div class="wizard-topbar">
+        <div class="container-fluid px-lg-4 px-3">
+            <div class="wizard-steps" id="wizardSteps">
+                <div class="wizard-step active" data-step-index="0">
+                    <span class="step-no">1</span>
+                    <span>Müşteri Bilgileri</span>
+                </div>
+
+                @for (int i = 0; i < Model.Categories.Count; i++)
+                {
+                    var stepIndex = i + 1;
+                    <div class="wizard-step" data-step-index="@stepIndex">
+                        <span class="step-no">@(stepIndex + 1)</span>
+                        <span>@Model.Categories[i].Name</span>
+                    </div>
+                }
+
+                <div class="wizard-step" data-step-index="@paymentStepIndex">
+                    <span class="step-no">@(paymentStepIndex + 1)</span>
+                    <span>Ödeme Planı</span>
+                </div>
+
+                <div class="wizard-step" data-step-index="@billingStepIndex">
+                    <span class="step-no">@(billingStepIndex + 1)</span>
+                    <span>Faturalandırma</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container wizard-shell">
+        <form id="offerWizardForm" method="post">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" id="SelectedPackagesJson" name="SelectedPackagesJson" />
+            <input type="hidden" id="SelectedPackagePiecesJson" name="SelectedPackagePiecesJson" />
+            <input type="hidden" id="SelectedSubPackagesJson" name="SelectedSubPackagesJson" />
+            <input type="hidden" id="SelectedSubPackagePiecesJson" name="SelectedSubPackagePiecesJson" />
+            <input type="hidden" id="SelectedPaymentPlanId" name="SelectedPaymentPlanId" />
+            <input type="hidden" id="AppliedDiscountRate" name="AppliedDiscountRate" />
+            <input type="hidden" id="SelectedDocumentType" name="SelectedDocumentType" />
+
+            <section class="wizard-section glass-panel section-panel active" data-step-index="0">
+                <div class="section-head">
+                    <span class="section-eyebrow">Teklif Sihirbazı</span>
+                    <h2 class="section-title">Müşteri bilgilerini girerek başlayın</h2>
+                    <p class="section-subtitle">
+                        İlk adımda müşteri/firma bilgilerini girin. Sonraki adımlarda kategori bazlı paket ve alt paket seçimini yaparak ödeme planına geçeceksiniz.
+                    </p>
+                </div>
+
+                <div class="customer-grid">
+                    <div>
+                        <label class="form-label modern-label">Müşteri / Firma Adı</label>
+                        <input type="text" id="CustomerName" class="form-control modern-input" name="CustomerName" placeholder="Firma veya müşteri adı" />
+                    </div>
+
+                    <div>
+                        <label class="form-label modern-label">E-Posta</label>
+                        <input type="email" id="CustomerEmail" class="form-control modern-input" name="Email" placeholder="ornek@mail.com" />
+                    </div>
+
+                    <div>
+                        <label class="form-label modern-label">Telefon</label>
+                        <input type="text" id="CustomerPhone" class="form-control modern-input" name="Phone" placeholder="05xx xxx xx xx" />
+                    </div>
+
+                    <div>
+                        <label class="form-label modern-label">Vergi Dairesi</label>
+                        <input type="text" id="CustomerTaxOffice" class="form-control modern-input" name="TaxOffice" placeholder="Vergi dairesi" />
+                    </div>
+
+                    <div>
+                        <label class="form-label modern-label">Vergi No</label>
+                        <input type="text" id="CustomerTaxNumber" class="form-control modern-input" name="TaxNumber" placeholder="Vergi numarası" />
+                    </div>
+
+                    <div class="full">
+                        <label class="form-label modern-label">Tebligat Adresi</label>
+                        <textarea id="CustomerNotificationAddress" class="form-control modern-input" name="NotificationAddress" placeholder="Adres bilgisi"></textarea>
+                    </div>
+                </div>
+            </section>
+
+            @for (int i = 0; i < Model.Categories.Count; i++)
+            {
+                var category = Model.Categories[i];
+                var stepIndex = i + 1;
+
+                <section class="wizard-section glass-panel section-panel" data-step-index="@stepIndex" data-category-id="@category.Id">
+                    <div class="section-head">
+                        <span class="section-eyebrow">Kategori</span>
+                        <h2 class="section-title">@category.Name</h2>
+                        <p class="section-subtitle">
+                            Bu kategoride paket ve alt paket kartlarını seçebilirsiniz. Seçim türü kategori ayarlarına göre tekli veya çoklu çalışır.
+                        </p>
+                    </div>
+
+                    <div class="selection-mode-badges">
+                        <span class="mode-badge">
+                            Paket seçimi:
+                            @(category.IsPackageMultiSelected ? "Çoklu seçim aktif" : "Tek seçim aktif")
+                        </span>
+                        <span class="mode-badge">
+                            Alt paket seçimi:
+                            @(category.IsSubPackageMultiSelected ? "Çoklu seçim aktif" : "Tek seçim aktif")
+                        </span>
+                    </div>
+
+                    <div class="block-title">
+                        <h4>Paketler</h4>
+                        <div class="selected-info" id="packageSelectedInfo_@category.Id">Seçilen: 0</div>
+                    </div>
+
+                    @if (category.Packages.Any())
+                    {
+                        <div class="cards-grid">
+                            @foreach (var package in category.Packages)
+                            {
+                                var defaultPiece = package.Piece.HasValue && package.Piece.Value > 0
+                                    ? package.Piece.Value
+                                    : 1;
+
+                                <div class="selection-card package-card"
+                                     data-item-type="package"
+                                     data-category-id="@category.Id"
+                                     data-item-id="@package.Id">
+                                    <div class="card-select-indicator">✓</div>
+
+                                    <div class="card-title">@package.Name</div>
+
+                                    <div class="card-price">
+                                        ₺@package.Price.ToString("N2", trCulture)
+                                        <small>/ @(package.IsPiece ? "adet" : "paket")</small>
+                                    </div>
+
+                                    <div class="card-badges">
+                                        @if (package.IsPiece)
+                                        {
+                                            <span class="mini-badge piece">Adetli</span>
+                                        }
+
+                                        @if (package.IsOneTime)
+                                        {
+                                            <span class="mini-badge one-time">Tek Seferlik</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="mini-badge">Dağıtılabilir</span>
+                                        }
+                                    </div>
+
+                                    @if (package.Features.Any())
+                                    {
+                                        <ul class="features-list">
+                                            @foreach (var feature in package.Features)
+                                            {
+                                                <li>@feature</li>
+                                            }
+                                        </ul>
+                                    }
+                                    else
+                                    {
+                                        <div class="empty-box">Bu paket için özellik tanımı bulunmuyor.</div>
+                                    }
+
+                                    @if (package.IsPiece)
+                                    {
+                                        <div class="piece-box" data-stop-card-click="true">
+                                            <label class="piece-label">Adet</label>
+                                            <input type="number"
+                                                   class="form-control piece-input package-piece-input"
+                                                   min="1"
+                                                   value="@defaultPiece"
+                                                   data-package-id="@package.Id"
+                                                   disabled />
+                                            <div class="piece-help">
+                                                Seçildiğinde toplam fiyat adet x birim fiyat olarak hesaplanır.
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-box">Bu kategoriye ait paket bulunmuyor.</div>
+                    }
+
+                    <div class="block-title">
+                        <h4>Alt Paketler</h4>
+                        <div class="selected-info" id="subPackageSelectedInfo_@category.Id">Seçilen: 0</div>
+                    </div>
+
+                    @if (category.SubPackages.Any())
+                    {
+                        <div class="cards-grid">
+                            @foreach (var subPackage in category.SubPackages)
+                            {
+                                var defaultPiece = subPackage.Piece.HasValue && subPackage.Piece.Value > 0
+                                    ? subPackage.Piece.Value
+                                    : 1;
+
+                                <div class="selection-card subpackage-card"
+                                     data-item-type="subpackage"
+                                     data-category-id="@category.Id"
+                                     data-item-id="@subPackage.Id">
+                                    <div class="card-select-indicator">✓</div>
+
+                                    <div class="card-title">@subPackage.Name</div>
+
+                                    <div class="card-price">
+                                        ₺@subPackage.Price.ToString("N2", trCulture)
+                                        <small>/ @(subPackage.IsPiece ? "adet" : "paket")</small>
+                                    </div>
+
+                                    <div class="card-badges">
+                                        @if (subPackage.IsPiece)
+                                        {
+                                            <span class="mini-badge piece">Adetli</span>
+                                        }
+
+                                        @if (subPackage.IsOneTime)
+                                        {
+                                            <span class="mini-badge one-time">Tek Seferlik</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="mini-badge">Dağıtılabilir</span>
+                                        }
+                                    </div>
+
+                                    @if (subPackage.Features.Any())
+                                    {
+                                        <ul class="features-list">
+                                            @foreach (var feature in subPackage.Features)
+                                            {
+                                                <li>@feature</li>
+                                            }
+                                        </ul>
+                                    }
+                                    else
+                                    {
+                                        <div class="empty-box">Bu alt paket için özellik tanımı bulunmuyor.</div>
+                                    }
+
+                                    @if (subPackage.IsPiece)
+                                    {
+                                        <div class="piece-box" data-stop-card-click="true">
+                                            <label class="piece-label">Adet</label>
+                                            <input type="number"
+                                                   class="form-control piece-input subpackage-piece-input"
+                                                   min="1"
+                                                   value="@defaultPiece"
+                                                   data-subpackage-id="@subPackage.Id"
+                                                   disabled />
+                                            <div class="piece-help">
+                                                Seçildiğinde toplam fiyat adet x birim fiyat olarak hesaplanır.
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-box">Bu kategoriye ait alt paket bulunmuyor.</div>
+                    }
+                </section>
+            }
+
+            <section class="wizard-section glass-panel section-panel" data-step-index="@paymentStepIndex">
+                <div class="section-head">
+                    <span class="section-eyebrow">Ödeme Planı</span>
+                    <h2 class="section-title">Ödeme planını ve indirimi belirleyin</h2>
+                    <p class="section-subtitle">
+                        Tek seferlik kalemler ilk aylara, diğer kalemler ise seçilen taksit sayısına eşit şekilde dağıtılır. Plan bazlı izin verilen maksimum indirim oranı otomatik kontrol edilir.
+                    </p>
+                </div>
+
+                @if (Model.PaymentPlans.Any())
+                {
+                    <div class="payment-tabs" id="paymentPlanTabs">
+                        @foreach (var plan in Model.PaymentPlans)
+                        {
+                            <button type="button"
+                                    class="payment-tab @(plan == Model.PaymentPlans.First() ? "active" : "")"
+                                    data-plan-id="@plan.Id">
+                                @plan.Name
+                                <span class="sub">@plan.NumberOfInstallments taksit · Maks. %@plan.DiscountRate indirim</span>
+                            </button>
+                        }
+                    </div>
+
+                    <div class="payment-layout">
+                        <div class="discount-card">
+                            <h5>İndirim Alanı</h5>
+
+                            <label class="form-label modern-label">İndirim Oranı (%)</label>
+                            <input type="number"
+                                   id="discountRateInput"
+                                   class="form-control modern-input"
+                                   min="0"
+                                   max="100"
+                                   step="0.01"
+                                   value="0"
+                                   placeholder="0" />
+
+                            <div class="warning-text" id="discountWarningText"></div>
+
+                            <div class="quick-stats">
+                                <div class="quick-stat">
+                                    <div class="label">Brüt Toplam</div>
+                                    <div class="value" id="grossTotalBox">₺0,00</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="label">İndirim Tutarı</div>
+                                    <div class="value" id="discountAmountBox">₺0,00</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="label">Net Toplam</div>
+                                    <div class="value" id="netTotalBox">₺0,00</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="label">Seçili Plan</div>
+                                    <div class="value selected-plan-box" id="selectedPlanBox">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="schedule-card">
+                            <h5>Taksit Dağılımı</h5>
+                            <div id="paymentScheduleContainer" class="schedule-items"></div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-box">Ödeme planı tanımlı değil.</div>
+                }
+            </section>
+
+            <section class="wizard-section glass-panel section-panel" data-step-index="@billingStepIndex">
+                <div class="section-head">
+                    <span class="section-eyebrow">Faturalandırma</span>
+                    <h2 class="section-title">Belge tipini seçin ve önizleyin</h2>
+                    <p class="section-subtitle">
+                        Kullanıcı burada belge tipini seçer, seçime göre önizleme oluşur. Ardından PDF olarak indirebilir.
+                    </p>
+                </div>
+
+                <div class="billing-layout">
+                    <div class="billing-sidebar">
+                        <div class="billing-card">
+                            <h5>Belge Ayarları</h5>
+
+                            <label class="form-label modern-label">Belge Tipi</label>
+                            <select id="billingDocumentType" class="form-select modern-input">
+                                <option value="proposal">Ön Protokol (Teklif Formatı)</option>
+                                <option value="contract">Hizmet Sözleşmesi</option>
+                            </select>
+
+                            <div class="billing-actions">
+                                <button type="button" id="downloadPdfBtn" class="billing-download-btn">
+                                    Yazdır / PDF İndir
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="billing-card">
+                            <h5>Belge Özeti</h5>
+
+                            <div class="billing-summary-list">
+                                <div class="billing-summary-item">
+                                    <span>Müşteri</span>
+                                    <strong id="billingSummaryCustomer">-</strong>
+                                </div>
+                                <div class="billing-summary-item">
+                                    <span>Belge Tipi</span>
+                                    <strong id="billingSummaryDocumentType">-</strong>
+                                </div>
+                                <div class="billing-summary-item">
+                                    <span>Seçili Plan</span>
+                                    <strong id="billingSummaryPlan">-</strong>
+                                </div>
+                                <div class="billing-summary-item">
+                                    <span>Brüt Toplam</span>
+                                    <strong id="billingSummaryGross">₺0,00</strong>
+                                </div>
+                                <div class="billing-summary-item">
+                                    <span>İndirim</span>
+                                    <strong id="billingSummaryDiscount">₺0,00</strong>
+                                </div>
+                                <div class="billing-summary-item">
+                                    <span>Net Toplam</span>
+                                    <strong id="billingSummaryNet">₺0,00</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="save-feedback" id="saveFeedbackBox"></div>
+                    </div>
+
+                    <div class="billing-preview-shell">
+                        <div class="billing-preview-toolbar">
+                            <span>Canlı Önizleme</span>
+                        </div>
+
+                        <div class="billing-preview-stage">
+                            <div id="billingPreviewArea"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </form>
+    </div>
+
+    <div class="wizard-bottom-bar">
+        <div class="container">
+            <div class="bottom-wrap">
+                <button type="button" id="prevStepBtn" class="wizard-nav-btn prev-btn">Geri</button>
+
+                <div class="bottom-total">
+                    <span class="label">Toplam Miktar</span>
+                    <span class="value" id="bottomTotalAmount">₺0,00</span>
+                    <span class="sub" id="bottomTotalSubtext">Seçim yaptıkça toplam burada güncellenir.</span>
+                </div>
+
+                <button type="button" id="nextStepBtn" class="wizard-nav-btn next-btn">İleri</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.offerWizardData = @Html.Raw(clientJson);
+        window.offerPdfLogoUrl = "@Url.Content("~/img/logo.png")";
+        window.offerSaveUrl = "@Url.Action("Save", "Offer")";
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="~/js/offer.js" asp-append-version="true"></script>
+}

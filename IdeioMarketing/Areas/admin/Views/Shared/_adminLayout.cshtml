@@ -1,0 +1,169 @@
+﻿@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var pageTitle = ViewData["Title"]?.ToString() ?? "Admin Panel";
+}
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@pageTitle - Admin Panel</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+    <link rel="stylesheet" href="~/css/admin-layout.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-crud.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-offers.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+    <div class="admin-shell">
+        <aside class="admin-sidebar" id="adminSidebar">
+            <div class="admin-sidebar-top">
+                <a asp-area="Admin" asp-controller="Home" asp-action="Index" class="admin-brand">
+                    <div class="admin-brand-icon">
+                        <i class="bi bi-grid-1x2-fill"></i>
+                    </div>
+                    <div>
+                        <div class="admin-brand-title">Ideio Admin</div>
+                        <div class="admin-brand-subtitle">Yönetim Paneli</div>
+                    </div>
+                </a>
+            </div>
+
+            <nav class="admin-menu">
+                <div class="admin-menu-title">Menü</div>
+
+                <a asp-area="Admin"
+                       asp-controller="Main"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "Home" ? "active" : "")">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                <a asp-area="Admin"
+                       asp-controller="Categories"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "Categories" ? "active" : "")">
+                    <i class="bi bi-tags"></i>
+                    <span>Kategoriler</span>
+                </a>
+
+                <a asp-area="Admin"
+                       asp-controller="Packages"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "Packages" ? "active" : "")">
+                    <i class="bi bi-box-seam"></i>
+                    <span>Paketler</span>
+                </a>
+
+                <a asp-area="Admin"
+                       asp-controller="SubPackages"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "SubPackages" ? "active" : "")">
+                    <i class="bi bi-box2-heart"></i>
+                    <span>Alt Paketler</span>
+                </a>
+
+                <a asp-area="Admin"
+                       asp-controller="PaymentPlans"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "PaymentPlans" ? "active" : "")">
+                    <i class="bi bi-credit-card-2-front"></i>
+                    <span>Ödeme Planları</span>
+                </a>
+
+                <a asp-area="Admin"
+                       asp-controller="Users"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "Users" ? "active" : "")">
+                    <i class="bi bi-people"></i>
+                    <span>Kullanıcılar</span>
+                </a>
+                <a asp-area="Admin"
+                       asp-controller="Offers"
+                       asp-action="Index"
+                       class="admin-menu-link @(controller == "Offers" ? "active" : "")">
+                    <i class="bi bi-people"></i>
+                    <span>Teklifler</span>
+                </a>
+            </nav>
+
+            <div class="admin-sidebar-footer">
+                <div class="admin-user-mini">
+                    <div class="admin-user-avatar">
+                        <i class="bi bi-person-circle"></i>
+                    </div>
+                    <div>
+                        <div class="admin-user-name">Yönetici Paneli</div>
+                        <div class="admin-user-role">Sistem Yönetimi</div>
+                    </div>
+                </div>
+
+                @* İstersen bunu kendi logout actionına göre aç *@
+                @*
+                <a asp-area="Admin" asp-controller="Login" asp-action="Logout" class="btn btn-light w-100 mt-3">
+                    <i class="bi bi-box-arrow-right me-2"></i>Çıkış Yap
+                </a> 
+                *@
+            </div>
+        </aside>
+
+        <div class="admin-main">
+            <header class="admin-header">
+                <div class="admin-header-left">
+                    <button type="button" class="admin-sidebar-toggle" id="adminSidebarToggle">
+                        <i class="bi bi-list"></i>
+                    </button>
+
+                    <div>
+                        <div class="admin-page-kicker">YÖNETİM PANELİ</div>
+                        <h1 class="admin-page-title">@pageTitle</h1>
+                    </div>
+                </div>
+
+                <div class="admin-header-right">
+                    <a asp-area="Admin" asp-controller="Home" asp-action="Index" class="admin-header-chip">
+                        <i class="bi bi-house-door"></i>
+                        <span>Anasayfa</span>
+                    </a>
+                </div>
+            </header>
+
+            <main class="admin-content">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <div class="admin-backdrop" id="adminBackdrop"></div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+            (function() {
+                const sidebar = document.getElementById('adminSidebar');
+                const toggle = document.getElementById('adminSidebarToggle');
+                const backdrop = document.getElementById('adminBackdrop');
+
+                if (!sidebar || !toggle || !backdrop) return;
+
+                toggle.addEventListener('click', function() {
+                    sidebar.classList.toggle('show');
+                    backdrop.classList.toggle('show');
+                });
+
+                backdrop.addEventListener('click', function() {
+                    sidebar.classList.remove('show');
+                    backdrop.classList.remove('show');
+                });
+            })();
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

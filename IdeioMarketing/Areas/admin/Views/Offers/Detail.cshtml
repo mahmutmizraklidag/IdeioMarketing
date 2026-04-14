@@ -1,0 +1,213 @@
+﻿@model IdeioMarketing.Areas.Admin.Models.OfferAdminDetailVm
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Teklif Detayı";
+    var trCulture = new CultureInfo("tr-TR");
+    var offer = Model.Offer;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-offers.css" asp-append-version="true" />
+}
+
+<div class="admin-offers-page">
+    <div class="admin-page-head detail-head">
+        <div>
+            <h1>Teklif Detayı</h1>
+            <p>@offer.OfferNo numaralı teklif kaydı</p>
+        </div>
+
+        <div class="detail-top-actions">
+            <a asp-area="Admin" asp-controller="Offers" asp-action="Index" class="btn-secondary-admin">Listeye Dön</a>
+
+            <a asp-area="Admin"
+                   asp-controller="Offers"
+                   asp-action="Document"
+                   asp-route-id="@offer.Id"
+                   target="_blank"
+                   class="btn-detail">
+                Belge Önizleme
+            </a>
+
+            <a asp-area="Admin"
+                   asp-controller="Offers"
+                   asp-action="Document"
+                   asp-route-id="@offer.Id"
+                   asp-route-autoDownload="true"
+                   target="_blank"
+                   class="btn-pdf">
+                PDF İndir
+            </a>
+
+            <form asp-area="Admin"
+                  asp-controller="Offers"
+                  asp-action="Delete"
+                  asp-route-id="@offer.Id"
+                  method="post"
+                  onsubmit="return confirm('Bu teklifi silmek istediğine emin misin?');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn-delete">Sil</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="admin-summary-cards">
+        <div class="summary-card">
+            <span>Belge Tipi</span>
+            <strong>@Model.DocumentTypeText</strong>
+        </div>
+        <div class="summary-card">
+            <span>Brüt Toplam</span>
+            <strong>@offer.GrossTotal.ToString("C2", trCulture)</strong>
+        </div>
+        <div class="summary-card">
+            <span>Net Toplam</span>
+            <strong>@offer.NetTotal.ToString("C2", trCulture)</strong>
+        </div>
+        <div class="summary-card">
+            <span>İndirim</span>
+            <strong>%@offer.DiscountRate.ToString("N2", trCulture)</strong>
+        </div>
+    </div>
+
+    <div class="detail-grid">
+        <div class="detail-card">
+            <h3>Müşteri Bilgileri</h3>
+            <div class="detail-info-grid">
+                <div class="detail-info-item">
+                    <span>Müşteri / Firma</span>
+                    <strong>@offer.CustomerName</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>E-Posta</span>
+                    <strong>@(string.IsNullOrWhiteSpace(offer.Email) ? "-" : offer.Email)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Telefon</span>
+                    <strong>@(string.IsNullOrWhiteSpace(offer.Phone) ? "-" : offer.Phone)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Vergi Dairesi</span>
+                    <strong>@(string.IsNullOrWhiteSpace(offer.TaxOffice) ? "-" : offer.TaxOffice)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Vergi No</span>
+                    <strong>@(string.IsNullOrWhiteSpace(offer.TaxNumber) ? "-" : offer.TaxNumber)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Kayıt Tarihi</span>
+                    <strong>@offer.CreatedAt.ToString("dd.MM.yyyy HH:mm")</strong>
+                </div>
+                <div class="detail-info-item full">
+                    <span>Tebligat Adresi</span>
+                    <strong>@(string.IsNullOrWhiteSpace(offer.NotificationAddress) ? "-" : offer.NotificationAddress)</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h3>Ödeme Bilgileri</h3>
+            <div class="detail-info-grid">
+                <div class="detail-info-item">
+                    <span>Ödeme Planı</span>
+                    <strong>@(string.IsNullOrWhiteSpace(offer.PaymentPlanName) ? "-" : offer.PaymentPlanName)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Taksit Sayısı</span>
+                    <strong>@offer.PaymentPlanInstallmentCount</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>İndirim Oranı</span>
+                    <strong>%@offer.DiscountRate.ToString("N2", trCulture)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>İndirim Tutarı</span>
+                    <strong>@offer.DiscountAmount.ToString("C2", trCulture)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Brüt Toplam</span>
+                    <strong>@offer.GrossTotal.ToString("C2", trCulture)</strong>
+                </div>
+                <div class="detail-info-item">
+                    <span>Net Toplam</span>
+                    <strong>@offer.NetTotal.ToString("C2", trCulture)</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h3>Seçilen Kalemler</h3>
+
+        @if (offer.Items.Any())
+        {
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Tür</th>
+                            <th>Kategori</th>
+                            <th>Kalem</th>
+                            <th>Adet</th>
+                            <th>Birim Fiyat</th>
+                            <th>Toplam</th>
+                            <th>Tek Seferlik</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in offer.Items.OrderBy(x => x.CategoryName).ThenBy(x => x.Name))
+                        {
+                            <tr>
+                                <td>@(item.ItemType == "package" ? "Paket" : "Alt Paket")</td>
+                                <td>@item.CategoryName</td>
+                                <td>@item.RawName</td>
+                                <td>@item.Quantity</td>
+                                <td>@item.UnitPrice.ToString("C2", trCulture)</td>
+                                <td>@item.TotalPrice.ToString("C2", trCulture)</td>
+                                <td>@(item.IsOneTime ? "Evet" : "Hayır")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-admin-box">Kalem bulunmuyor.</div>
+        }
+    </div>
+
+    <div class="detail-card">
+        <h3>Taksitler</h3>
+
+        @if (offer.Installments.Any())
+        {
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Ay</th>
+                            <th>Brüt</th>
+                            <th>Net</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var installment in offer.Installments.OrderBy(x => x.MonthNo))
+                        {
+                            <tr>
+                                <td>@installment.MonthNo. Ay</td>
+                                <td>@installment.GrossAmount.ToString("C2", trCulture)</td>
+                                <td>@installment.NetAmount.ToString("C2", trCulture)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-admin-box">Taksit kaydı bulunmuyor.</div>
+        }
+    </div>
+</div>

@@ -1,0 +1,387 @@
+﻿@model IdeioMarketing.Areas.Admin.Models.SubPackagePageVm
+@{
+    ViewData["Title"] = "Alt Paketler";
+}
+
+<link rel="stylesheet" href="~/css/admin-crud.css" asp-append-version="true" />
+
+<style>
+    .category-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .category-tab-btn {
+        border: 1px solid #dbe3ef;
+        background: #fff;
+        color: #334155;
+        border-radius: 999px;
+        padding: 10px 16px;
+        font-weight: 600;
+        transition: .2s ease;
+    }
+
+        .category-tab-btn.active {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+        }
+</style>
+
+<div class="container-fluid admin-crud-page px-4">
+    <div class="admin-hero mb-4">
+        <div class="section-kicker">ADMIN PANEL</div>
+        <h2>Alt Paket Yönetimi</h2>
+        <p>Alt paketleri kategoriye bağlayabilir, özellikleri dinamik şekilde ekleyebilir ve tüm yönetimi tek sayfadan yapabilirsin.</p>
+    </div>
+
+    @if (TempData["AdminSuccess"] != null)
+    {
+        <div class="alert alert-success shadow-sm border-0 mb-4">@TempData["AdminSuccess"]</div>
+    }
+
+    @if (TempData["AdminError"] != null)
+    {
+        <div class="alert alert-danger shadow-sm border-0 mb-4">@TempData["AdminError"]</div>
+    }
+
+    <div class="row g-4">
+        <div class="col-xl-4">
+            <div class="admin-card sticky-card">
+                <div class="card-body">
+                    <div class="section-kicker">FORM</div>
+                    <div class="section-title">@(Model.Form.Id == 0 ? "Yeni Alt Paket Ekle" : "Alt Paket Düzenle")</div>
+                    <div class="section-subtitle">Kategori, fiyat, parça kullanımı, tek seferlik bilgisi ve özellikleri bu formdan yönetebilirsin.</div>
+
+                    @if (!Model.Categories.Any())
+                    {
+                        <div class="alert alert-warning border-0">
+                            Önce kategori eklemelisin. Kategori olmadan alt paket kaydı oluşturulamaz.
+                        </div>
+                    }
+
+                    <form asp-area="Admin" asp-controller="SubPackages" asp-action="Save" method="post" id="subPackageForm">
+                        @Html.AntiForgeryToken()
+                        <input asp-for="Form.Id" type="hidden" />
+
+                        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.CategoryId" class="form-label"></label>
+                            <select asp-for="Form.CategoryId" asp-items="Model.Categories" class="form-select">
+                                <option value="">Kategori seçiniz</option>
+                            </select>
+                            <span asp-validation-for="Form.CategoryId" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Name" class="form-label"></label>
+                            <input asp-for="Form.Name" class="form-control" placeholder="Örn: Basic Alt Paket" />
+                            <span asp-validation-for="Form.Name" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Price" class="form-label"></label>
+                            <input asp-for="Form.Price" class="form-control" placeholder="Örn: 7.500 TL" />
+                            <span asp-validation-for="Form.Price" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label d-block">Tek Seferlik Mi?</label>
+                            <div class="border rounded-4 px-3 py-3 bg-light">
+                                <div class="form-check m-0 d-flex align-items-center gap-2">
+                                    <input asp-for="Form.IsOneTime"
+                                           class="form-check-input"
+                                           id="isOneTimeSwitch"
+                                           style="width:18px; height:18px; margin-top:0; opacity:1;" />
+                                    <label class="form-check-label fw-semibold" for="isOneTimeSwitch">
+                                        Bu alt paket tek seferlik olsun
+                                    </label>
+                                </div>
+                            </div>
+                            <span asp-validation-for="Form.IsOneTime" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input asp-for="Form.IsPiece" class="form-check-input" id="isPieceSwitch" />
+                                <label asp-for="Form.IsPiece" class="form-check-label"></label>
+                            </div>
+                            <span asp-validation-for="Form.IsPiece" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Piece" class="form-label"></label>
+                            <input asp-for="Form.Piece" class="form-control" type="number" min="1" placeholder="Örn: 6" id="pieceInput" />
+                            <span asp-validation-for="Form.Piece" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Alt Paket Özellikleri</label>
+                            <div class="feature-box">
+                                <div id="sub-feature-list">
+                                    @for (int i = 0; i < Model.Form.FeatureTitles.Count; i++)
+                                    {
+                                        <div class="feature-item">
+                                            <input type="text"
+                                                   name="Form.FeatureTitles[@i]"
+                                                   value="@Model.Form.FeatureTitles[i]"
+                                                   class="form-control"
+                                                   placeholder="Özellik giriniz" />
+                                            <button type="button" class="btn btn-outline-danger feature-remove">Sil</button>
+                                        </div>
+                                    }
+                                </div>
+
+                                <button type="button" id="add-sub-feature-btn" class="btn btn-light w-100 mt-3">+ Özellik Ekle</button>
+                            </div>
+                            <div class="helper-note">İstersen özellik ekleyebilirsin. Boş bırakırsan özelliksiz olarak kaydedilir.</div>
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary flex-fill">
+                                @(Model.Form.Id == 0 ? "Kaydet" : "Güncelle")
+                            </button>
+                            <a asp-area="Admin" asp-controller="SubPackages" asp-action="Index" class="btn btn-light flex-fill">Temizle</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-8">
+            <div class="admin-card">
+                <div class="card-body">
+                    <div class="top-inline">
+                        <div>
+                            <div class="section-title mb-0">Mevcut Alt Paketler</div>
+                            <div class="section-subtitle mb-0">Alt paket listesi ve işlemleri tek yerde.</div>
+                        </div>
+                        <div class="count-pill">@Model.Items.Count kayıt</div>
+                    </div>
+
+                    <div class="category-tabs" id="subPackageCategoryTabs">
+                        <button type="button" class="category-tab-btn active" data-category-id="all">Tümü</button>
+                        @foreach (var category in Model.CategoryTabs)
+                        {
+                            <button type="button"
+                                    class="category-tab-btn"
+                                    data-category-id="@category.Value">
+                                @category.Text
+                            </button>
+                        }
+                    </div>
+
+                    @if (!Model.Items.Any())
+                    {
+                        <div class="empty-state">
+                            <h5>Henüz alt paket kaydı yok</h5>
+                            <div>Sol taraftaki formdan ilk alt paketi oluşturabilirsin.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-modern">
+                                <thead>
+                                    <tr>
+                                        <th>Alt Paket</th>
+                                        <th>Kategori</th>
+                                        <th>Fiyat</th>
+                                        <th>Parça Kullanımı</th>
+                                        <th>Parça</th>
+                                        <th>Tek Seferlik</th>
+                                        <th>Özellikler</th>
+                                        <th class="text-end">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subPackageTableBody">
+                                    @foreach (var item in Model.Items)
+                                    {
+                                        <tr class="subpackage-row" data-category-id="@item.CategoryId">
+                                            <td>
+                                                <div class="entity-title">@item.Name</div>
+                                                <div class="entity-meta">ID: @item.Id</div>
+                                            </td>
+                                            <td>@item.CategoryName</td>
+                                            <td>@item.Price</td>
+                                            <td>
+                                                @if (item.IsPiece)
+                                                {
+                                                    <span class="status-ok">Aktif</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="status-passive">Kapalı</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @(item.IsPiece ? (item.Piece?.ToString() ?? "-") : "-")
+                                            </td>
+                                            <td>
+                                                @if (item.IsOneTime)
+                                                {
+                                                    <span class="status-ok">Evet</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="status-passive">Hayır</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (item.FeatureTitles.Any())
+                                                {
+                                                    @foreach (var feature in item.FeatureTitles)
+                                                    {
+                                                        <span class="badge-soft">@feature</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge-soft-dark">Özellik yok</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="inline-actions justify-content-end">
+                                                    <a asp-area="Admin"
+                                                           asp-controller="SubPackages"
+                                                           asp-action="Index"
+                                                           asp-route-editId="@item.Id"
+                                                           class="btn btn-sm btn-outline-primary">
+                                                        Düzenle
+                                                    </a>
+
+                                                    <form asp-area="Admin" asp-controller="SubPackages" asp-action="Delete" method="post" onsubmit="return confirm('Bu alt paketi silmek istediğine emin misin?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="id" value="@item.Id" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+
+                                    <tr id="subPackageEmptyFilterRow" style="display:none;">
+                                        <td colspan="8">
+                                            <div class="empty-state">
+                                                <h5>Bu kategoride alt paket bulunamadı</h5>
+                                                <div>Başka bir kategori seçebilir ya da yeni kayıt ekleyebilirsin.</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_ValidationScriptsPartial")
+
+<script>
+    (function() {
+        const list = document.getElementById('sub-feature-list');
+        const addButton = document.getElementById('add-sub-feature-btn');
+        const isPieceSwitch = document.getElementById('isPieceSwitch');
+        const pieceInput = document.getElementById('pieceInput');
+
+        function togglePieceInput() {
+            if (!isPieceSwitch || !pieceInput) return;
+
+            const active = isPieceSwitch.checked;
+            pieceInput.disabled = !active;
+
+            if (!active) {
+                pieceInput.value = '';
+            }
+        }
+
+        if (isPieceSwitch) {
+            isPieceSwitch.addEventListener('change', togglePieceInput);
+            togglePieceInput();
+        }
+
+        if (list && addButton) {
+            function renumber() {
+                const inputs = list.querySelectorAll('input');
+                inputs.forEach((input, index) => {
+                    input.name = `Form.FeatureTitles[${index}]`;
+                });
+            }
+
+            function createItem(value = '') {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'feature-item';
+                wrapper.innerHTML = `
+                        <input type="text" class="form-control" placeholder="Özellik giriniz" />
+                        <button type="button" class="btn btn-outline-danger feature-remove">Sil</button>
+                    `;
+                wrapper.querySelector('input').value = value;
+                return wrapper;
+            }
+
+            addButton.addEventListener('click', function() {
+                list.appendChild(createItem());
+                renumber();
+            });
+
+            list.addEventListener('click', function(e) {
+                const removeButton = e.target.closest('.feature-remove');
+                if (!removeButton) return;
+
+                const items = list.querySelectorAll('.feature-item');
+
+                if (items.length === 1) {
+                    items[0].querySelector('input').value = '';
+                    return;
+                }
+
+                removeButton.closest('.feature-item').remove();
+                renumber();
+            });
+
+            if (!list.querySelector('.feature-item')) {
+                list.appendChild(createItem());
+            }
+
+            renumber();
+        }
+
+        const tabButtons = document.querySelectorAll('#subPackageCategoryTabs .category-tab-btn');
+        const rows = document.querySelectorAll('.subpackage-row');
+        const emptyRow = document.getElementById('subPackageEmptyFilterRow');
+
+        function filterSubPackageRows(categoryId) {
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const rowCategoryId = row.getAttribute('data-category-id');
+
+                const show = categoryId === 'all' || rowCategoryId === categoryId;
+                row.style.display = show ? '' : 'none';
+
+                if (show) visibleCount++;
+            });
+
+            if (emptyRow) {
+                emptyRow.style.display = visibleCount === 0 ? '' : 'none';
+            }
+        }
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                tabButtons.forEach(x => x.classList.remove('active'));
+                this.classList.add('active');
+                filterSubPackageRows(this.getAttribute('data-category-id'));
+            });
+        });
+
+        filterSubPackageRows('all');
+    })();
+</script>
