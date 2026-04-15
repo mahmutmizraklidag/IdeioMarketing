@@ -134,6 +134,7 @@ namespace IdeioMarketing.Controllers
                     PaymentPlanId = request.PaymentPlanId,
                     PaymentPlanName = request.PaymentPlanName?.Trim(),
                     PaymentPlanInstallmentCount = request.PaymentPlanInstallmentCount,
+                    ContractDurationMonths = Math.Max(request.ContractDurationMonths, 1),
                     DiscountRate = ParseDecimalFlexible(request.DiscountRate),
                     DiscountAmount = ParseDecimalFlexible(request.DiscountAmount),
                     GrossTotal = ParseDecimalFlexible(request.GrossTotal),

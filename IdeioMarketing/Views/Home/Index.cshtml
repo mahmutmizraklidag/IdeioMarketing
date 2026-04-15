@@ -1,8 +1,111 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Ana Sayfa";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="simple-home">
+    <div class="simple-home-box">
+        <span class="simple-badge">Ideio Marketing</span>
+
+        <h1>Tekliflerinizi hızlı ve düzenli şekilde oluşturun</h1>
+
+        <p>
+            Paketlerinizi seçin, ödeme planınızı belirleyin ve teklifinizi tek ekrandan kolayca hazırlayın.
+        </p>
+
+        <a asp-controller="Offer" asp-action="Index" class="create-offer-btn">
+            Teklif Oluştur
+        </a>
+    </div>
 </div>
+
+<style>
+    .simple-home {
+        min-height: calc(100vh - 120px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 16px;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    }
+
+    .simple-home-box {
+        width: 100%;
+        max-width: 760px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        border-radius: 24px;
+        padding: 48px 32px;
+        text-align: center;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }
+
+    .simple-badge {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #eef4ff;
+        color: #1f3f75;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        margin-bottom: 18px;
+    }
+
+    .simple-home-box h1 {
+        margin: 0 0 14px;
+        font-size: 42px;
+        line-height: 1.15;
+        font-weight: 900;
+        color: #162033;
+    }
+
+    .simple-home-box p {
+        margin: 0 auto 28px;
+        max-width: 560px;
+        font-size: 16px;
+        line-height: 1.8;
+        color: #6b7280;
+    }
+
+    .create-offer-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 180px;
+        min-height: 52px;
+        padding: 0 24px;
+        border-radius: 14px;
+        background: #1f3f75;
+        color: #fff;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 800;
+        transition: .2s ease;
+    }
+
+        .create-offer-btn:hover {
+            background: #19345f;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+    @@media (max-width: 767.98px) {
+        .simple-home-box {
+            padding: 32px 20px;
+            border-radius: 18px;
+        }
+
+            .simple-home-box h1 {
+                font-size: 30px;
+            }
+
+            .simple-home-box p {
+                font-size: 15px;
+            }
+
+        .create-offer-btn {
+            width: 100%;
+        }
+    }
+</style>

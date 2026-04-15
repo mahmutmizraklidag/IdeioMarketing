@@ -12,6 +12,7 @@
         public int? PaymentPlanId { get; set; }
         public string? PaymentPlanName { get; set; }
         public int PaymentPlanInstallmentCount { get; set; }
+        public int ContractDurationMonths { get; set; } = 1;
 
         public string? DiscountRate { get; set; }
         public string? DiscountAmount { get; set; }

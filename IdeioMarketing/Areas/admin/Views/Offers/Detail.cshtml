@@ -118,6 +118,10 @@
                     <strong>@offer.PaymentPlanInstallmentCount</strong>
                 </div>
                 <div class="detail-info-item">
+                    <span>Sözleşme Süresi</span>
+                    <strong>@offer.ContractDurationMonths Ay</strong>
+                </div>
+                <div class="detail-info-item">
                     <span>İndirim Oranı</span>
                     <strong>%@offer.DiscountRate.ToString("N2", trCulture)</strong>
                 </div>
@@ -158,13 +162,17 @@
                     <tbody>
                         @foreach (var item in offer.Items.OrderBy(x => x.CategoryName).ThenBy(x => x.Name))
                         {
+                            var displayName = item.IsOneTime || offer.ContractDurationMonths <= 1
+                                ? item.RawName
+                                : $"{item.RawName} ({offer.ContractDurationMonths} Ay)";
+                            var displayTotal = item.IsOneTime ? item.TotalPrice : item.TotalPrice * offer.ContractDurationMonths;
                             <tr>
                                 <td>@(item.ItemType == "package" ? "Paket" : "Alt Paket")</td>
                                 <td>@item.CategoryName</td>
-                                <td>@item.RawName</td>
+                                <td>@displayName</td>
                                 <td>@item.Quantity</td>
                                 <td>@item.UnitPrice.ToString("C2", trCulture)</td>
-                                <td>@item.TotalPrice.ToString("C2", trCulture)</td>
+                                <td>@displayTotal.ToString("C2", trCulture)</td>
                                 <td>@(item.IsOneTime ? "Evet" : "Hayır")</td>
                             </tr>
                         }

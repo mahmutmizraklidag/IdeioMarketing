@@ -1,12 +1,13 @@
 ﻿using IdeioMarketing.Areas.Admin.Models;
 using IdeioMarketing.Data;
 using IdeioMarketing.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace IdeioMarketing.Areas.Admin.Controllers
 {
-    [Area("Admin")]
+    [Area("Admin"),Authorize]
     public class OffersController : Controller
     {
         private readonly DatabaseContext _context;

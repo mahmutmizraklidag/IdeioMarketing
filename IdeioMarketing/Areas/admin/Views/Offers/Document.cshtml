@@ -54,6 +54,7 @@
         paymentPlanId = offer.PaymentPlanId,
         paymentPlanName = offer.PaymentPlanName,
         paymentPlanInstallmentCount = offer.PaymentPlanInstallmentCount,
+        contractDurationMonths = offer.ContractDurationMonths,
         discountRate = offer.DiscountRate,
         discountAmount = offer.DiscountAmount,
         grossTotal = offer.GrossTotal,
@@ -170,6 +171,21 @@
         return value && String(value).trim() ? escapeHtml(String(value).trim()) : fallback;
         }
 
+        function getDisplayItemName(item) {
+        const baseName = item?.rawName || item?.name || "";
+
+        if (!item?.isOneTime && Number(data.contractDurationMonths || 1) > 1) {
+        return `${baseName} (${Number(data.contractDurationMonths || 1)} ay)`;
+        }
+
+        return baseName;
+        }
+
+        function getDisplayItemAmount(item) {
+        const baseAmount = Number(item?.amount || 0);
+        return item?.isOneTime ? baseAmount : baseAmount * Number(data.contractDurationMonths || 1);
+        }
+
         function buildItemsTableRows(items, startIndex = 0) {
         if (!items.length) {
         return `
@@ -182,9 +198,9 @@
         return items.map((item, index) => `
         <tr>
         <td>${startIndex + index + 1}</td>
-        <td>${escapeHtml(item.rawName || item.name)}</td>
+        <td>${escapeHtml(getDisplayItemName(item))}</td>
         <td>${item.quantity || 1}</td>
-        <td>${formatCurrency(item.amount)}</td>
+        <td>${formatCurrency(getDisplayItemAmount(item))}</td>
         </tr>
         `).join("");
         }
@@ -342,6 +358,10 @@
         <tr>
         <th>Ödeme Planı</th>
         <td>${escapeHtml(data.paymentPlanName || "-")}</td>
+        </tr>
+        <tr>
+        <th>Sözleşme Süresi</th>
+        <td>${Number(data.contractDurationMonths || 1)} Ay</td>
         </tr>
         <tr>
         <th>İndirim Oranı</th>
@@ -503,6 +523,10 @@
         <tr>
         <th>Ödeme Planı</th>
         <td>${escapeHtml(data.paymentPlanName || "-")}</td>
+        </tr>
+        <tr>
+        <th>Sözleşme Süresi</th>
+        <td>${Number(data.contractDurationMonths || 1)} Ay</td>
         </tr>
         <tr>
         <th>İndirim Oranı</th>

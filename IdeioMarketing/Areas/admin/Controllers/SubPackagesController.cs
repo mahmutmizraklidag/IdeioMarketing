@@ -1,13 +1,14 @@
 ﻿using IdeioMarketing.Areas.Admin.Models;
 using IdeioMarketing.Data;
 using IdeioMarketing.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
 namespace IdeioMarketing.Areas.Admin.Controllers
 {
-    [Area("Admin")]
+    [Area("Admin"),Authorize]
     public class SubPackagesController : Controller
     {
         private readonly DatabaseContext _context;

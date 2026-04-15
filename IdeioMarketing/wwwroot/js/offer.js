@@ -55,6 +55,7 @@
         selectedSubPackages: {},
         subPackagePieces: {},
         selectedPaymentPlanId: wizardData.paymentPlans.length ? wizardData.paymentPlans[0].id : null,
+        contractDurationMonths: 1,
         enteredDiscountRate: 0,
         selectedDocumentType: "proposal"
     };
@@ -82,6 +83,8 @@
     const nextStepBtn = document.getElementById("nextStepBtn");
     const bottomTotalAmount = document.getElementById("bottomTotalAmount");
     const bottomTotalSubtext = document.getElementById("bottomTotalSubtext");
+    const contractDurationInput = document.getElementById("contractDurationInput");
+    const contractDurationBox = document.getElementById("contractDurationBox");
     const discountRateInput = document.getElementById("discountRateInput");
     const discountWarningText = document.getElementById("discountWarningText");
     const grossTotalBox = document.getElementById("grossTotalBox");
@@ -95,6 +98,7 @@
     const selectedSubPackagesJsonInput = document.getElementById("SelectedSubPackagesJson");
     const selectedSubPackagePiecesJsonInput = document.getElementById("SelectedSubPackagePiecesJson");
     const selectedPaymentPlanIdInput = document.getElementById("SelectedPaymentPlanId");
+    const contractDurationMonthsInput = document.getElementById("ContractDurationMonths");
     const appliedDiscountRateInput = document.getElementById("AppliedDiscountRate");
     const selectedDocumentTypeInput = document.getElementById("SelectedDocumentType");
 
@@ -113,6 +117,7 @@
     const billingSummaryCustomer = document.getElementById("billingSummaryCustomer");
     const billingSummaryDocumentType = document.getElementById("billingSummaryDocumentType");
     const billingSummaryPlan = document.getElementById("billingSummaryPlan");
+    const billingSummaryContractDuration = document.getElementById("billingSummaryContractDuration");
     const billingSummaryGross = document.getElementById("billingSummaryGross");
     const billingSummaryDiscount = document.getElementById("billingSummaryDiscount");
     const billingSummaryNet = document.getElementById("billingSummaryNet");
@@ -217,6 +222,55 @@
    }).format(new Date());
     }
 
+    function getContractDurationMonths() {
+        const rawValue = Number(state.contractDurationMonths || 1);
+        const safeValue = Math.max(parseInt(rawValue, 10) || 1, 1);
+        return safeValue;
+    }
+    function getAvailablePaymentPlans(contractDurationMonths = getContractDurationMonths()) {
+        return (wizardData.paymentPlans || [])
+            .filter(plan => Number(plan.numberOfInstallments || 0) <= contractDurationMonths)
+            .sort((a, b) => {
+                const aCount = Number(a.numberOfInstallments || 0);
+                const bCount = Number(b.numberOfInstallments || 0);
+                return aCount - bCount;
+            });
+    }
+
+    function syncPaymentPlanAvailability() {
+        const contractDurationMonths = getContractDurationMonths();
+        const availablePlans = getAvailablePaymentPlans(contractDurationMonths);
+        const availablePlanIds = availablePlans.map(x => Number(x.id));
+
+        document.querySelectorAll(".payment-tab").forEach(tab => {
+            const planId = Number(tab.dataset.planId);
+            const isAllowed = availablePlanIds.includes(planId);
+
+            tab.disabled = !isAllowed;
+            tab.classList.toggle("disabled", !isAllowed);
+
+            if (!isAllowed) {
+                tab.classList.remove("active");
+            }
+        });
+
+        if (!availablePlanIds.length) {
+            state.selectedPaymentPlanId = null;
+            return;
+        }
+
+        const currentPlanStillValid = availablePlanIds.includes(Number(state.selectedPaymentPlanId));
+
+        if (!currentPlanStillValid) {
+            const bestMatchedPlan = availablePlans[availablePlans.length - 1];
+            state.selectedPaymentPlanId = bestMatchedPlan ? Number(bestMatchedPlan.id) : Number(availablePlans[0].id);
+        }
+
+        document.querySelectorAll(".payment-tab").forEach(tab => {
+            const planId = Number(tab.dataset.planId);
+            tab.classList.toggle("active", planId === Number(state.selectedPaymentPlanId));
+        });
+    }
     function getSelectedItems() {
         const items = [];
 
@@ -304,76 +358,88 @@
         return result.map(x => round2(x));
     }
 
-    function buildPaymentPlanSummary(planId, requestedDiscountRate) {
-        const plan = wizardData.paymentPlans.find(x => x.id === planId);
+function buildPaymentPlanSummary(planId, requestedDiscountRate) {
+    const contractDurationMonths = getContractDurationMonths();
+    const availablePlans = getAvailablePaymentPlans(contractDurationMonths);
+    const availablePlanIds = availablePlans.map(x => Number(x.id));
 
-        if (!plan) {
-            return {
-                plan: null,
-                grossTotal: 0,
-                discountAmount: 0,
-                netTotal: 0,
-                appliedDiscountRate: 0,
-                requestedDiscountRate: 0,
-                warning: "",
-                installments: []
-            };
-        }
+    let resolvedPlanId = Number(planId || 0);
 
-        const { items, total } = getSelectedItems();
-        const installmentCount = Math.max(parseInt(plan.numberOfInstallments || 1, 10), 1);
+    if (!availablePlanIds.includes(resolvedPlanId)) {
+        const bestMatchedPlan = availablePlans[availablePlans.length - 1];
+        resolvedPlanId = bestMatchedPlan ? Number(bestMatchedPlan.id) : 0;
+    }
 
-        const installments = Array.from({ length: installmentCount }, (_, index) => ({
+    const plan = wizardData.paymentPlans.find(x => Number(x.id) === resolvedPlanId);
+
+    if (!plan) {
+        return {
+            plan: null,
+            grossTotal: 0,
+            discountAmount: 0,
+            netTotal: 0,
+            appliedDiscountRate: 0,
+            requestedDiscountRate: 0,
+            warning: "Bu sözleşme süresine uygun ödeme planı bulunamadı.",
+            installments: [],
+            contractDurationMonths
+        };
+    }
+
+    const { items } = getSelectedItems();
+    const installmentCount = Math.max(parseInt(plan.numberOfInstallments || 1, 10), 1);
+
+    const installments = Array.from({ length: installmentCount }, (_, index) => ({
        month: index + 1,
        gross: 0,
        net: 0,
        lines: []
    }));
 
-        const recurringItems = items.filter(x => !x.isOneTime);
-        const oneTimeItems = items.filter(x => x.isOneTime);
+    const recurringItems = items.filter(x => !x.isOneTime);
+    const oneTimeItems = items.filter(x => x.isOneTime);
 
-        recurringItems.forEach(item => {
-       const shares = splitAmountEvenly(item.amount, installmentCount);
+    recurringItems.forEach(item => {
+       const contractAmount = round2(item.amount * contractDurationMonths);
+       const shares = splitAmountEvenly(contractAmount, installmentCount);
 
        shares.forEach((share, index) => {
            if (share <= 0) return;
 
            installments[index].gross = round2(installments[index].gross + share);
            installments[index].lines.push({
-               name: item.name,
+               name: `${item.name} (${contractDurationMonths} ay sözleşme)`,
                amount: share,
                type: "recurring"
            });
        });
    });
 
-        oneTimeItems.forEach((item, index) => {
-       const targetMonthIndex = Math.min(index, installmentCount - 1);
-       installments[targetMonthIndex].gross = round2(installments[targetMonthIndex].gross + item.amount);
-       installments[targetMonthIndex].lines.push({
+    oneTimeItems.forEach(item => {
+       installments[0].gross = round2(installments[0].gross + item.amount);
+       installments[0].lines.push({
            name: `${item.name} (tek seferlik)`,
            amount: item.amount,
            type: "oneTime"
        });
    });
 
-        const maxDiscountRate = Number(plan.discountRate || 0);
-        const safeRequestedDiscountRate = Math.min(Math.max(Number(requestedDiscountRate || 0), 0), 100);
-        const appliedDiscountRate = Math.min(safeRequestedDiscountRate, maxDiscountRate);
+    const maxDiscountRate = Number(plan.discountRate || 0);
+    const safeRequestedDiscountRate = Math.min(Math.max(Number(requestedDiscountRate || 0), 0), 100);
+    const appliedDiscountRate = Math.min(safeRequestedDiscountRate, maxDiscountRate);
 
-        let warning = "";
-        if (safeRequestedDiscountRate > maxDiscountRate) {
-            warning = `Bu ödeme planında %${maxDiscountRate}'dan fazla indirim uygulanamaz.`;
-        }
+    let warning = "";
+    if (safeRequestedDiscountRate > maxDiscountRate) {
+        warning = `Bu ödeme planında %${maxDiscountRate}'dan fazla indirim uygulanamaz.`;
+    }
 
-        const grossTotal = round2(total);
-        const discountAmount = round2(grossTotal * appliedDiscountRate / 100);
-        const netTotal = round2(grossTotal - discountAmount);
+    const grossTotal = round2(installments.reduce((sum, installment) => sum + installment.gross, 0));
+    const discountAmount = round2(grossTotal * appliedDiscountRate / 100);
+    const netTotal = round2(grossTotal - discountAmount);
 
-        let remainingNet = netTotal;
+    let remainingNet = netTotal;
 
-        installments.forEach((installment, index) => {
+    installments.forEach((installment, index) => {
        if (index < installments.length - 1) {
            installment.net = round2(installment.gross * (1 - (appliedDiscountRate / 100)));
            remainingNet = round2(remainingNet - installment.net);
@@ -382,16 +448,32 @@
        }
    });
 
-        return {
-            plan,
-            grossTotal,
-            discountAmount,
-            netTotal,
-            appliedDiscountRate,
-            requestedDiscountRate: safeRequestedDiscountRate,
-            warning,
-            installments
-        };
+    return {
+        plan,
+        contractDurationMonths,
+        grossTotal,
+        discountAmount,
+        netTotal,
+        appliedDiscountRate,
+        requestedDiscountRate: safeRequestedDiscountRate,
+        warning,
+        installments
+    };
+}
+
+    function getDisplayItemName(item, contractDurationMonths = getContractDurationMonths()) {
+        const baseName = item?.rawName || item?.name || "";
+
+        if (!item?.isOneTime && contractDurationMonths > 1) {
+            return `${baseName} (${contractDurationMonths} ay)`;
+        }
+
+        return baseName;
+    }
+
+    function getDisplayItemAmount(item, contractDurationMonths = getContractDurationMonths()) {
+        const baseAmount = round2(item?.amount || 0);
+        return item?.isOneTime ? baseAmount : round2(baseAmount * contractDurationMonths);
     }
 
     function updateHiddenInputs(summary) {
@@ -415,6 +497,10 @@
             selectedPaymentPlanIdInput.value = state.selectedPaymentPlanId || "";
         }
 
+        if (contractDurationMonthsInput) {
+            contractDurationMonthsInput.value = summary?.contractDurationMonths ?? getContractDurationMonths();
+        }
+
         if (appliedDiscountRateInput) {
             appliedDiscountRateInput.value = summary?.appliedDiscountRate ?? 0;
         }
@@ -424,7 +510,7 @@
         }
     }
 
-    function buildItemsTableRows(items, startIndex = 0) {
+    function buildItemsTableRows(items, startIndex = 0, contractDurationMonths = getContractDurationMonths()) {
         if (!items.length) {
             return `
                 <tr>
@@ -436,9 +522,9 @@
         return items.map((item, index) => `
             <tr>
                 <td>${startIndex + index + 1}</td>
-                <td>${escapeHtml(item.rawName || item.name)}</td>
+                <td>${escapeHtml(getDisplayItemName(item, contractDurationMonths))}</td>
                 <td>${item.quantity || 1}</td>
-                <td>${formatCurrency(item.amount)}</td>
+                <td>${formatCurrency(getDisplayItemAmount(item, contractDurationMonths))}</td>
             </tr>
         `).join("");
     }
@@ -549,7 +635,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${buildItemsTableRows(firstItemChunk, 0)}
+                            ${buildItemsTableRows(firstItemChunk, 0, summary.contractDurationMonths)}
                         </tbody>
                     </table>
                 </div>
@@ -574,7 +660,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${buildItemsTableRows(itemChunks[i], i * 12)}
+                                    ${buildItemsTableRows(itemChunks[i], i * 12, summary.contractDurationMonths)}
                                 </tbody>
                             </table>
                         </div>
@@ -596,6 +682,10 @@
                             <tr>
                                 <th>Ödeme Planı</th>
                                 <td>${summary.plan ? escapeHtml(summary.plan.name) : "-"}</td>
+                            </tr>
+                            <tr>
+                                <th>Sözleşme Süresi</th>
+                                <td>${summary.contractDurationMonths} Ay</td>
                             </tr>
                             <tr>
                                 <th>İndirim Oranı</th>
@@ -736,7 +826,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${buildItemsTableRows(chunk, index * 14)}
+                                ${buildItemsTableRows(chunk, index * 14, summary.contractDurationMonths)}
                             </tbody>
                         </table>
                     </div>
@@ -757,6 +847,10 @@
                             <tr>
                                 <th>Ödeme Planı</th>
                                 <td>${summary.plan ? escapeHtml(summary.plan.name) : "-"}</td>
+                            </tr>
+                            <tr>
+                                <th>Sözleşme Süresi</th>
+                                <td>${summary.contractDurationMonths} Ay</td>
                             </tr>
                             <tr>
                                 <th>İndirim Oranı</th>
@@ -856,6 +950,9 @@
         if (selectedPlanBox) {
             selectedPlanBox.textContent = `${summary.plan.name} (${summary.plan.numberOfInstallments} taksit)`;
         }
+        if (contractDurationBox) {
+            contractDurationBox.textContent = `${summary.contractDurationMonths} Ay`;
+        }
         if (discountWarningText) {
             discountWarningText.textContent = summary.warning || "";
         }
@@ -928,6 +1025,10 @@
             billingSummaryPlan.textContent = summary.plan
    ? `${summary.plan.name} (${summary.plan.numberOfInstallments} taksit)`
    : "-";
+        }
+
+        if (billingSummaryContractDuration) {
+            billingSummaryContractDuration.textContent = `${summary.contractDurationMonths} Ay`;
         }
 
         if (billingSummaryGross) {
@@ -1075,6 +1176,7 @@
             formData.append("PaymentPlanId", summary.plan?.id != null ? String(summary.plan.id) : "");
             formData.append("PaymentPlanName", summary.plan?.name || "");
             formData.append("PaymentPlanInstallmentCount", summary.plan?.numberOfInstallments != null ? String(summary.plan.numberOfInstallments) : "0");
+            formData.append("ContractDurationMonths", String(summary.contractDurationMonths));
 
             formData.append("DiscountRate", String(summary.appliedDiscountRate));
             formData.append("DiscountAmount", String(summary.discountAmount));
@@ -1180,8 +1282,12 @@
 
         bottomTotalAmount.textContent = formatCurrency(summary.grossTotal);
 
-        if ((currentStep?.type === "payment" || currentStep?.type === "billing") && summary.appliedDiscountRate > 0) {
-            bottomTotalSubtext.textContent = `İndirimli toplam: ${formatCurrency(summary.netTotal)} · Uygulanan indirim: %${summary.appliedDiscountRate}`;
+        if (currentStep?.type === "payment" || currentStep?.type === "billing") {
+            const discountText = summary.appliedDiscountRate > 0
+   ? ` · İndirimli toplam: ${formatCurrency(summary.netTotal)} · Uygulanan indirim: %${summary.appliedDiscountRate}`
+   : "";
+
+            bottomTotalSubtext.textContent = `Sözleşme süresi: ${summary.contractDurationMonths} ay${discountText}`;
         } else {
             bottomTotalSubtext.textContent = "Seçim yaptıkça toplam burada güncellenir.";
         }
@@ -1361,19 +1467,46 @@
        });
    });
 
-        document.querySelectorAll(".payment-tab").forEach(tab => {
-       tab.addEventListener("click", function() {
-           const planId = Number(this.dataset.planId);
-           state.selectedPaymentPlanId = planId;
+      document.querySelectorAll(".payment-tab").forEach(tab => {
+          tab.addEventListener("click", function() {
+              if (this.disabled || this.classList.contains("disabled")) {
+                  return;
+              }
 
-           document.querySelectorAll(".payment-tab").forEach(x => x.classList.remove("active"));
-           this.classList.add("active");
+              const planId = Number(this.dataset.planId);
+              const contractDurationMonths = getContractDurationMonths();
+              const availablePlanIds = getAvailablePaymentPlans(contractDurationMonths).map(x => Number(x.id));
 
-           refreshBottomTotal();
-           renderPaymentPlanSummary();
-           renderBillingPreview();
-       });
-   });
+              if (!availablePlanIds.includes(planId)) {
+                  return;
+              }
+
+              state.selectedPaymentPlanId = planId;
+
+              document.querySelectorAll(".payment-tab").forEach(x => x.classList.remove("active"));
+              this.classList.add("active");
+
+              refreshBottomTotal();
+              renderPaymentPlanSummary();
+              renderBillingPreview();
+          });
+      });
+
+        if (contractDurationInput) {
+           contractDurationInput.addEventListener("input", function() {
+               let value = parseInt(this.value || "1", 10);
+
+               if (isNaN(value) || value < 1) value = 1;
+
+               this.value = value;
+               state.contractDurationMonths = value;
+
+               syncPaymentPlanAvailability();
+               renderPaymentPlanSummary();
+               refreshBottomTotal();
+               renderBillingPreview();
+           });
+       }
 
         if (discountRateInput) {
             discountRateInput.addEventListener("input", function() {
@@ -1383,6 +1516,7 @@
        if (value > 100) value = 100;
 
        state.enteredDiscountRate = value;
+       syncPaymentPlanAvailability();
        renderPaymentPlanSummary();
        refreshBottomTotal();
        renderBillingPreview();

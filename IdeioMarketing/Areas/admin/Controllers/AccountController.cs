@@ -1,0 +1,83 @@
+﻿using IdeioMarketing.Data;
+using IdeioMarketing.Models;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages;
+using System.Security.Claims;
+
+namespace IdeioMarketing.Areas.admin.Controllers
+{
+    [Area("admin")]
+    public class AccountController : Controller
+    {
+        private readonly DatabaseContext _db;
+
+        public AccountController(DatabaseContext db)
+        {
+            _db = db;
+        }
+
+        [HttpGet]
+        public IActionResult Login()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+                return RedirectToAction("Index", "Home");
+
+            ViewBag.LayoutOff = true;
+            return View(new LoginVm());
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Login(LoginVm vm)
+        {
+            ViewBag.LayoutOff = true;
+
+            if (!ModelState.IsValid)
+                return View(vm);
+
+            var user = await _db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Username == vm.Username);
+
+            if (user == null || user.password != vm.Password)
+            {
+                ModelState.AddModelError("", "Kullanıcı adı veya şifre hatalı.");
+                return View(vm);
+            }
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Username)
+            };
+
+            var identity = new ClaimsIdentity(
+                claims,
+                CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var principal = new ClaimsPrincipal(identity);
+
+            var authProperties = new AuthenticationProperties
+            {
+                IsPersistent = true,
+                AllowRefresh = true
+            };
+
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                principal,
+                authProperties);
+
+            return RedirectToAction("Index", "Main");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Logout()
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Login");
+        }
+    }
+}

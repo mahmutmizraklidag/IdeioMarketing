@@ -67,6 +67,7 @@
             <input type="hidden" id="SelectedSubPackagesJson" name="SelectedSubPackagesJson" />
             <input type="hidden" id="SelectedSubPackagePiecesJson" name="SelectedSubPackagePiecesJson" />
             <input type="hidden" id="SelectedPaymentPlanId" name="SelectedPaymentPlanId" />
+            <input type="hidden" id="ContractDurationMonths" name="ContractDurationMonths" value="1" />
             <input type="hidden" id="AppliedDiscountRate" name="AppliedDiscountRate" />
             <input type="hidden" id="SelectedDocumentType" name="SelectedDocumentType" />
 
@@ -90,7 +91,7 @@
                         <input type="email" id="CustomerEmail" class="form-control modern-input" name="Email" placeholder="ornek@mail.com" />
                     </div>
 
-                    <div>
+                    <div class="full">
                         <label class="form-label modern-label">Telefon</label>
                         <input type="text" id="CustomerPhone" class="form-control modern-input" name="Phone" placeholder="05xx xxx xx xx" />
                     </div>
@@ -306,7 +307,7 @@
                     <span class="section-eyebrow">Ödeme Planı</span>
                     <h2 class="section-title">Ödeme planını ve indirimi belirleyin</h2>
                     <p class="section-subtitle">
-                        Tek seferlik kalemler ilk aylara, diğer kalemler ise seçilen taksit sayısına eşit şekilde dağıtılır. Plan bazlı izin verilen maksimum indirim oranı otomatik kontrol edilir.
+                        Tek seferlik kalemlerin tamamı ilk aya eklenir. Tek seferlik olmayan kalemler ise önce sözleşme ayı süresi ile çarpılır, ardından seçilen ödeme planının taksit sayısına eşit şekilde dağıtılır. Plan bazlı izin verilen maksimum indirim oranı otomatik kontrol edilir.
                     </p>
                 </div>
 
@@ -328,7 +329,16 @@
                         <div class="discount-card">
                             <h5>İndirim Alanı</h5>
 
-                            <label class="form-label modern-label">İndirim Oranı (%)</label>
+                            <label class="form-label modern-label">Sözleşme Ayı Süresi</label>
+                            <input type="number"
+                                   id="contractDurationInput"
+                                   class="form-control modern-input"
+                                   min="1"
+                                   step="1"
+                                   value="1"
+                                   placeholder="1" />
+
+                            <label class="form-label modern-label mt-3">İndirim Oranı (%)</label>
                             <input type="number"
                                    id="discountRateInput"
                                    class="form-control modern-input"
@@ -356,6 +366,10 @@
                                 <div class="quick-stat">
                                     <div class="label">Seçili Plan</div>
                                     <div class="value selected-plan-box" id="selectedPlanBox">-</div>
+                                </div>
+                                <div class="quick-stat">
+                                    <div class="label">Sözleşme Süresi</div>
+                                    <div class="value selected-plan-box" id="contractDurationBox">1 Ay</div>
                                 </div>
                             </div>
                         </div>
@@ -414,6 +428,10 @@
                                 <div class="billing-summary-item">
                                     <span>Seçili Plan</span>
                                     <strong id="billingSummaryPlan">-</strong>
+                                </div>
+                                <div class="billing-summary-item">
+                                    <span>Sözleşme Süresi</span>
+                                    <strong id="billingSummaryContractDuration">1 Ay</strong>
                                 </div>
                                 <div class="billing-summary-item">
                                     <span>Brüt Toplam</span>
