@@ -126,13 +126,14 @@
                     <strong>%@offer.DiscountRate.ToString("N2", trCulture)</strong>
                 </div>
                 <div class="detail-info-item">
-                    <span>İndirim Tutarı</span>
-                    <strong>@offer.DiscountAmount.ToString("C2", trCulture)</strong>
-                </div>
-                <div class="detail-info-item">
                     <span>Brüt Toplam</span>
                     <strong>@offer.GrossTotal.ToString("C2", trCulture)</strong>
                 </div>
+                <div class="detail-info-item">
+                    <span>İndirim Tutarı</span>
+                    <strong>@offer.DiscountAmount.ToString("C2", trCulture)</strong>
+                </div>
+               
                 <div class="detail-info-item">
                     <span>Net Toplam</span>
                     <strong>@offer.NetTotal.ToString("C2", trCulture)</strong>

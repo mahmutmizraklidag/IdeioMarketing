@@ -568,6 +568,7 @@ function buildPaymentPlanSummary(planId, requestedDiscountRate) {
         `;
     }
 
+
     function buildPdfPage(bodyHtml, pageNo, totalPages, docLabel) {
         return `
             <section class="document-preview-page">
@@ -583,236 +584,712 @@ function buildPaymentPlanSummary(planId, requestedDiscountRate) {
         `;
     }
 
+    function createPdfPageElement(docLabel) {
+        const pageEl = document.createElement("section");
+        pageEl.className = "document-preview-page";
+        pageEl.innerHTML = `
+            ${buildPdfPageHeader(docLabel)}
+            <div class="pdf-page-content"></div>
+            <div class="pdf-page-footer">
+                <span>${escapeHtml(docLabel)}</span>
+                <span class="page-number-text"></span>
+            </div>
+        `;
+        return pageEl;
+    }
+
+    function getOrCreatePaginationSandbox() {
+        let sandbox = document.getElementById("documentPaginationSandbox");
+
+        if (!sandbox) {
+            sandbox = document.createElement("div");
+            sandbox.id = "documentPaginationSandbox";
+            sandbox.className = "document-pagination-sandbox";
+            sandbox.setAttribute("aria-hidden", "true");
+            document.body.appendChild(sandbox);
+        }
+
+        sandbox.innerHTML = "";
+        return sandbox;
+    }
+
+    function isPageOverflowing(pageEl) {
+        const contentEl = pageEl?.querySelector(".pdf-page-content");
+        if (!contentEl) return false;
+
+        return (contentEl.scrollHeight - contentEl.clientHeight) > 1;
+    }
+
+    function buildSectionContinuationTitle(titleEl) {
+        if (!titleEl) return null;
+
+        const clonedTitle = titleEl.cloneNode(true);
+        const plainText = (clonedTitle.textContent || "").trim();
+
+        if (plainText && !plainText.toLowerCase().includes("devam")) {
+            clonedTitle.textContent = `${plainText} (Devam)`;
+        }
+
+        return clonedTitle;
+    }
+
+    function cloneDirectChildren(elements) {
+        return (elements || []).map(x => x.cloneNode(true));
+    }
+
+    function getDirectChildByClass(parent, className) {
+        return Array.from(parent?.children || []).find(x => x.classList?.contains(className)) || null;
+    }
+
+    function buildDocumentBlocks(rawPages) {
+        const root = document.createElement("div");
+        root.innerHTML = (rawPages || []).join("");
+
+        const blocks = [];
+        const nodes = Array.from(root.childNodes || []);
+
+        for (let i = 0; i < nodes.length; i++) {
+            const current = nodes[i];
+
+            if (current.nodeType === Node.TEXT_NODE) {
+                if ((current.textContent || "").trim()) {
+                    const textBlock = document.createElement("div");
+                    textBlock.className = "doc-free-text-block";
+                    textBlock.textContent = current.textContent.trim();
+                    blocks.push(textBlock);
+                }
+                continue;
+            }
+
+            if (current.nodeType !== Node.ELEMENT_NODE) {
+                continue;
+            }
+
+            if (current.classList.contains("doc-title")) {
+                const wrapper = document.createElement("div");
+                wrapper.className = "doc-flow-heading";
+                wrapper.appendChild(current.cloneNode(true));
+
+                const next = nodes[i + 1];
+                if (next && next.nodeType === Node.ELEMENT_NODE && next.classList.contains("doc-subtitle")) {
+                    wrapper.appendChild(next.cloneNode(true));
+                    i += 1;
+                }
+
+                blocks.push(wrapper);
+                continue;
+            }
+
+            if (current.classList.contains("doc-subtitle")) {
+                const wrapper = document.createElement("div");
+                wrapper.className = "doc-flow-heading";
+                wrapper.appendChild(current.cloneNode(true));
+                blocks.push(wrapper);
+                continue;
+            }
+
+            blocks.push(current.cloneNode(true));
+        }
+
+        return blocks;
+    }
+
+    function measureBlockFitsOnFreshPage(blockEl, sandbox, docLabel) {
+        sandbox.innerHTML = "";
+
+        const pageEl = createPdfPageElement(docLabel);
+        sandbox.appendChild(pageEl);
+        pageEl.querySelector(".pdf-page-content").appendChild(blockEl.cloneNode(true));
+
+        return !isPageOverflowing(pageEl);
+    }
+
+    function splitSectionByListItems(sectionEl, sandbox, docLabel) {
+        const listEl = getDirectChildByClass(sectionEl, "doc-list");
+        if (!listEl) return [sectionEl.cloneNode(true)];
+
+        const titleEl = getDirectChildByClass(sectionEl, "doc-section-title");
+        const directChildren = Array.from(sectionEl.children || []);
+        const listIndex = directChildren.indexOf(listEl);
+        const beforeList = directChildren.slice(0, listIndex).filter(x => x !== titleEl);
+        const afterList = directChildren.slice(listIndex + 1);
+        const items = Array.from(listEl.children || []).filter(x => x.tagName === "LI");
+
+        if (!items.length) return [sectionEl.cloneNode(true)];
+
+        const groups = [];
+        let currentGroup = [];
+
+        for (const item of items) {
+            const trialGroup = currentGroup.concat(item);
+            const trialSection = document.createElement("div");
+            trialSection.className = sectionEl.className;
+
+            const heading = currentGroup.length ? buildSectionContinuationTitle(titleEl) : titleEl?.cloneNode(true);
+            if (heading) trialSection.appendChild(heading);
+
+            cloneDirectChildren(beforeList).forEach(x => trialSection.appendChild(x));
+
+            const listClone = listEl.cloneNode(false);
+            if (listEl.tagName === "OL") {
+                const startValue = Number(listEl.getAttribute("start") || 1);
+                const previousCount = groups.reduce((sum, group) => sum + group.length, 0);
+                listClone.setAttribute("start", String(startValue + previousCount));
+            }
+
+            trialGroup.forEach(li => listClone.appendChild(li.cloneNode(true)));
+            trialSection.appendChild(listClone);
+
+            if (measureBlockFitsOnFreshPage(trialSection, sandbox, docLabel)) {
+                currentGroup = trialGroup;
+                continue;
+            }
+
+            if (!currentGroup.length) {
+                currentGroup = [item];
+                continue;
+            }
+
+            groups.push(currentGroup);
+            currentGroup = [item];
+        }
+
+        if (currentGroup.length) {
+            groups.push(currentGroup);
+        }
+
+        const result = [];
+        let consumedItems = 0;
+
+        groups.forEach((group, index) => {
+            const chunk = document.createElement("div");
+            chunk.className = sectionEl.className;
+
+            const heading = index > 0 ? buildSectionContinuationTitle(titleEl) : titleEl?.cloneNode(true);
+            if (heading) chunk.appendChild(heading);
+
+            cloneDirectChildren(beforeList).forEach(x => chunk.appendChild(x));
+
+            const listClone = listEl.cloneNode(false);
+            if (listEl.tagName === "OL") {
+                const startValue = Number(listEl.getAttribute("start") || 1);
+                listClone.setAttribute("start", String(startValue + consumedItems));
+            }
+
+            group.forEach(li => listClone.appendChild(li.cloneNode(true)));
+            chunk.appendChild(listClone);
+            consumedItems += group.length;
+
+            if (index === groups.length - 1) {
+                cloneDirectChildren(afterList).forEach(x => chunk.appendChild(x));
+            }
+
+            result.push(chunk);
+        });
+
+        return result.length ? result : [sectionEl.cloneNode(true)];
+    }
+
+    function buildSectionTableChunk(sectionEl, titleEl, beforeTable, tableWrapEl, tableEl, theadEl, colgroupEl, rows, afterTable, chunkIndex, isLastChunk) {
+        const chunk = document.createElement("div");
+        chunk.className = sectionEl.className;
+
+        const heading = chunkIndex > 0 ? buildSectionContinuationTitle(titleEl) : titleEl?.cloneNode(true);
+        if (heading) chunk.appendChild(heading);
+
+        cloneDirectChildren(beforeTable).forEach(x => chunk.appendChild(x));
+
+        const tableWrapClone = tableWrapEl.cloneNode(false);
+        const tableClone = tableEl.cloneNode(false);
+
+        if (colgroupEl) {
+            tableClone.appendChild(colgroupEl.cloneNode(true));
+        }
+
+        if (theadEl) {
+            tableClone.appendChild(theadEl.cloneNode(true));
+        }
+
+        const tbodyClone = document.createElement("tbody");
+        rows.forEach(row => tbodyClone.appendChild(row.cloneNode(true)));
+        tableClone.appendChild(tbodyClone);
+        tableWrapClone.appendChild(tableClone);
+        chunk.appendChild(tableWrapClone);
+
+        if (isLastChunk) {
+            cloneDirectChildren(afterTable).forEach(x => chunk.appendChild(x));
+        }
+
+        return chunk;
+    }
+
+    function splitSectionByTableRows(sectionEl, sandbox, docLabel) {
+        const tableWrapEl = getDirectChildByClass(sectionEl, "doc-table-wrap");
+        if (!tableWrapEl) return [sectionEl.cloneNode(true)];
+
+        const tableEl = tableWrapEl.querySelector(".doc-table, table");
+        const tbodyEl = tableEl?.querySelector("tbody");
+        const rows = Array.from(tbodyEl?.children || []).filter(x => x.tagName === "TR");
+        const titleEl = getDirectChildByClass(sectionEl, "doc-section-title");
+        const directChildren = Array.from(sectionEl.children || []);
+        const tableIndex = directChildren.indexOf(tableWrapEl);
+        const beforeTable = directChildren.slice(0, tableIndex).filter(x => x !== titleEl);
+        const afterTable = directChildren.slice(tableIndex + 1);
+        const theadEl = tableEl?.querySelector("thead");
+        const colgroupEl = tableEl?.querySelector("colgroup");
+
+        if (!tableEl || !tbodyEl || !rows.length) {
+            return [sectionEl.cloneNode(true)];
+        }
+
+        const groups = [];
+        let currentGroup = [];
+
+        for (const row of rows) {
+            const trialGroup = currentGroup.concat(row);
+            const trialChunk = buildSectionTableChunk(sectionEl, titleEl, beforeTable, tableWrapEl, tableEl, theadEl, colgroupEl, trialGroup, [], groups.length, false);
+
+            if (measureBlockFitsOnFreshPage(trialChunk, sandbox, docLabel)) {
+                currentGroup = trialGroup;
+                continue;
+            }
+
+            if (!currentGroup.length) {
+                currentGroup = [row];
+                continue;
+            }
+
+            groups.push(currentGroup);
+            currentGroup = [row];
+        }
+
+        if (currentGroup.length) {
+            groups.push(currentGroup);
+        }
+
+        const result = groups.map((group, index) =>
+            buildSectionTableChunk(sectionEl, titleEl, beforeTable, tableWrapEl, tableEl, theadEl, colgroupEl, group, afterTable, index, index === groups.length - 1)
+        );
+
+        return result.length ? result : [sectionEl.cloneNode(true)];
+    }
+
+    function buildSectionInfoGridChunk(sectionEl, titleEl, beforeGrid, gridEl, items, afterGrid, chunkIndex, isLastChunk) {
+        const chunk = document.createElement("div");
+        chunk.className = sectionEl.className;
+
+        const heading = chunkIndex > 0 ? buildSectionContinuationTitle(titleEl) : titleEl?.cloneNode(true);
+        if (heading) chunk.appendChild(heading);
+
+        cloneDirectChildren(beforeGrid).forEach(x => chunk.appendChild(x));
+
+        const gridClone = gridEl.cloneNode(false);
+        items.forEach(item => gridClone.appendChild(item.cloneNode(true)));
+        chunk.appendChild(gridClone);
+
+        if (isLastChunk) {
+            cloneDirectChildren(afterGrid).forEach(x => chunk.appendChild(x));
+        }
+
+        return chunk;
+    }
+
+    function splitSectionByInfoItems(sectionEl, sandbox, docLabel) {
+        const gridEl = getDirectChildByClass(sectionEl, "doc-info-grid");
+        if (!gridEl) return [sectionEl.cloneNode(true)];
+
+        const items = Array.from(gridEl.children || []).filter(x => x.classList?.contains("doc-info-item"));
+        if (!items.length) return [sectionEl.cloneNode(true)];
+
+        const titleEl = getDirectChildByClass(sectionEl, "doc-section-title");
+        const directChildren = Array.from(sectionEl.children || []);
+        const gridIndex = directChildren.indexOf(gridEl);
+        const beforeGrid = directChildren.slice(0, gridIndex).filter(x => x !== titleEl);
+        const afterGrid = directChildren.slice(gridIndex + 1);
+
+        const groups = [];
+        let currentGroup = [];
+
+        for (const item of items) {
+            const trialGroup = currentGroup.concat(item);
+            const trialChunk = buildSectionInfoGridChunk(sectionEl, titleEl, beforeGrid, gridEl, trialGroup, [], groups.length, false);
+
+            if (measureBlockFitsOnFreshPage(trialChunk, sandbox, docLabel)) {
+                currentGroup = trialGroup;
+                continue;
+            }
+
+            if (!currentGroup.length) {
+                currentGroup = [item];
+                continue;
+            }
+
+            groups.push(currentGroup);
+            currentGroup = [item];
+        }
+
+        if (currentGroup.length) {
+            groups.push(currentGroup);
+        }
+
+        const result = groups.map((group, index) =>
+            buildSectionInfoGridChunk(sectionEl, titleEl, beforeGrid, gridEl, group, afterGrid, index, index === groups.length - 1)
+        );
+
+        return result.length ? result : [sectionEl.cloneNode(true)];
+    }
+
+    function splitOversizedBlock(blockEl, sandbox, docLabel) {
+        if (!blockEl || blockEl.nodeType !== Node.ELEMENT_NODE) {
+            return [blockEl.cloneNode(true)];
+        }
+
+        if (!blockEl.classList) {
+            return [blockEl.cloneNode(true)];
+        }
+
+        if (!blockEl.classList.contains("doc-section")) {
+            return [blockEl.cloneNode(true)];
+        }
+
+        if (getDirectChildByClass(blockEl, "doc-table-wrap")) {
+            return splitSectionByTableRows(blockEl, sandbox, docLabel);
+        }
+
+        if (getDirectChildByClass(blockEl, "doc-list")) {
+            return splitSectionByListItems(blockEl, sandbox, docLabel);
+        }
+
+        if (getDirectChildByClass(blockEl, "doc-info-grid")) {
+            return splitSectionByInfoItems(blockEl, sandbox, docLabel);
+        }
+
+        return [blockEl.cloneNode(true)];
+    }
+
+    function buildAutoPaginatedPages(rawPages, docLabel) {
+        const blocks = buildDocumentBlocks(rawPages);
+        const sandbox = getOrCreatePaginationSandbox();
+        const pages = [];
+
+        let currentPage = createPdfPageElement(docLabel);
+        sandbox.appendChild(currentPage);
+        pages.push(currentPage);
+
+        const createNewPage = () => {
+            currentPage = createPdfPageElement(docLabel);
+            sandbox.appendChild(currentPage);
+            pages.push(currentPage);
+        };
+
+        const queue = blocks.map(x => x.cloneNode(true));
+        let guard = 0;
+
+        while (queue.length && guard < 10000) {
+            guard += 1;
+
+            const block = queue.shift();
+            const contentEl = currentPage.querySelector(".pdf-page-content");
+            const trialClone = block.cloneNode(true);
+            contentEl.appendChild(trialClone);
+
+            if (!isPageOverflowing(currentPage)) {
+                continue;
+            }
+
+            contentEl.removeChild(trialClone);
+
+            if (contentEl.children.length > 0) {
+                createNewPage();
+                const freshContentEl = currentPage.querySelector(".pdf-page-content");
+                const freshClone = block.cloneNode(true);
+                freshContentEl.appendChild(freshClone);
+
+                if (!isPageOverflowing(currentPage)) {
+                    continue;
+                }
+
+                freshContentEl.removeChild(freshClone);
+            }
+
+            const splitBlocks = splitOversizedBlock(block, sandbox, docLabel);
+            const isUnchanged = splitBlocks.length === 1 && splitBlocks[0].outerHTML === block.outerHTML;
+
+            if (isUnchanged) {
+                currentPage.querySelector(".pdf-page-content").appendChild(block.cloneNode(true));
+                continue;
+            }
+
+            for (let i = splitBlocks.length - 1; i >= 0; i -= 1) {
+                queue.unshift(splitBlocks[i].cloneNode(true));
+            }
+        }
+
+        if (!pages.length) {
+            return [];
+        }
+
+        const totalPages = pages.length;
+        pages.forEach((pageEl, index) => {
+            const numberEl = pageEl.querySelector(".page-number-text");
+            if (numberEl) {
+                numberEl.textContent = `Sayfa ${index + 1} / ${totalPages}`;
+            }
+        });
+
+        const finalPages = pages.map(pageEl => pageEl.outerHTML);
+        sandbox.innerHTML = "";
+        return finalPages;
+    }
+
     function buildProposalPages(customer, items, summary) {
         const pages = [];
-        const itemChunks = chunkArray(items, 12);
-        const installmentChunks = chunkArray(summary.installments, 12);
+        const itemChunks = chunkArray(items, 9999);
+        const installmentChunks = chunkArray(summary.installments || [], 9999);
 
         const firstItemChunk = itemChunks[0] || [];
+        const firstInstallmentChunk = installmentChunks[0] || [];
+
+        const serviceProvider = {
+            companyName: "Ideio Creative Tasarım Reklamcılık Sosyal Medya Hizmetleri Sanayi ve Ticaret Limited Şirketi",
+            address: "Mansuroğlu, 287. Sk. No:6 Daire:2, 35530 Bayraklı/İzmir",
+            taxOffice: "Bornova Vergi Dairesi",
+            taxNumber: "4651560067",
+            email: "info@ideiocreative.com",
+            iban: "TR11 0006 2001 2750 0006 2961 41",
+            bankName: "Garanti Bankası",
+            accountHolder: "IDEIOCREATIVE Tasarım Reklamcılık Sosyal Medya Hiz. San. ve Tic. Ltd. Şti."
+        };
+
+        function safe(val, fallback = "-") {
+            if (val === null || val === undefined) return fallback;
+            const str = String(val).trim();
+            return str ? escapeHtml(str) : fallback;
+        }
+
+        function formatDate(val, fallback = "..... / ..... / ..........") {
+            if (!val) return fallback;
+
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                const day = String(d.getDate()).padStart(2, "0");
+                const month = String(d.getMonth() + 1).padStart(2, "0");
+                const year = d.getFullYear();
+                return `${day}.${month}.${year}`;
+            }
+
+            return escapeHtml(String(val));
+        }
+
+        function getProtocolStartDate() {
+            return summary.protocolDate || summary.contractStartDate || summary.startDate || summary.firstPaymentDate || "";
+        }
+
+        function getProtocolEndDate() {
+            if (summary.protocolEndDate) return summary.protocolEndDate;
+            if (summary.contractEndDate) return summary.contractEndDate;
+
+            const start = getProtocolStartDate();
+            const months = Number(summary.contractDurationMonths || 0);
+
+            if (start && months > 0) {
+                const d = new Date(start);
+                if (!isNaN(d.getTime())) {
+                    d.setMonth(d.getMonth() + months);
+                    return d;
+                }
+            }
+
+            return "";
+        }
+
+        function getSelectedPackageName() {
+            return summary.selectedPackageName || summary.plan?.name || "Seçilen Paket";
+        }
+
+        function getMonthlyFeeText() {
+            if (summary.monthlyFee !== undefined && summary.monthlyFee !== null) {
+                return `${formatCurrency(summary.monthlyFee)} + KDV`;
+            }
+
+            if ((summary.contractDurationMonths || 0) > 0 && (summary.netTotal || 0) > 0) {
+                const monthly = Number(summary.netTotal) / Number(summary.contractDurationMonths);
+                return `${formatCurrency(monthly)} + KDV`;
+            }
+
+            return `${formatCurrency(summary.netTotal || 0)} + KDV`;
+        }
+
+        function getPaymentPlanText() {
+            return summary.plan ? escapeHtml(summary.plan.name) : "-";
+        }
+
+        function getSocialAccountsText() {
+            const accounts = [];
+
+            if (customer.instagram) accounts.push(`${escapeHtml(customer.instagram)} Instagram`);
+            if (customer.youtube) accounts.push(`${escapeHtml(customer.youtube)} YouTube`);
+            if (customer.tiktok) accounts.push(`${escapeHtml(customer.tiktok)} TikTok`);
+            if (customer.facebook) accounts.push(`${escapeHtml(customer.facebook)} Facebook`);
+            if (customer.linkedin) accounts.push(`${escapeHtml(customer.linkedin)} LinkedIn`);
+
+            if (!accounts.length) return "Hizmet Alan’a ait sosyal medya hesapları";
+
+            if (accounts.length === 1) return accounts[0];
+            if (accounts.length === 2) return `${accounts[0]} ve ${accounts[1]}`;
+
+            return `${accounts.slice(0, -1).join(", ")} ve ${accounts[accounts.length - 1]}`;
+        }
+
+        function getAdContributionText() {
+            if (summary.adBudgetContributionRate !== undefined && summary.adBudgetContributionRate !== null) {
+                return `%${escapeHtml(String(summary.adBudgetContributionRate))}`;
+            }
+
+            const selected = getSelectedPackageName().toLowerCase();
+            if (selected.includes("temel")) return "%20";
+            if (selected.includes("pro")) return "%0";
+            if (selected.includes("premium")) return "%0";
+
+            return "%0";
+        }
 
         pages.push(`
-            <div class="doc-title">Hizmet Ön Protokolü ve Teklif Formu</div>
-            <div class="doc-subtitle">
-                Sayın ${displayValue(customer.name, "Müşteri")} için oluşturulan teklif önizlemesi.
-            </div>
+        <div class="doc-title">Hizmet Ön Protokolü</div>
+        <div class="doc-subtitle">
+            Sayın ${displayValue(customer.name, "Müşteri")} için hazırlanan hizmet kapsamı ve ticari teklif ön protokolüdür.
+        </div>
 
-            <div class="doc-section">
-                <div class="doc-section-title">Müşteri Bilgileri</div>
-                <div class="doc-info-grid">
-                    <div class="doc-info-item">
-                        <span>Müşteri / Firma Adı</span>
-                        <strong>${displayValue(customer.name)}</strong>
-                    </div>
-                    <div class="doc-info-item">
-                        <span>E-Posta</span>
-                        <strong>${displayValue(customer.email)}</strong>
-                    </div>
-                    <div class="doc-info-item">
-                        <span>Telefon</span>
-                        <strong>${displayValue(customer.phone)}</strong>
-                    </div>
-                    <div class="doc-info-item">
-                        <span>Vergi Dairesi / Vergi No</span>
-                        <strong>${displayValue(customer.taxOffice)} / ${displayValue(customer.taxNumber)}</strong>
-                    </div>
-                    <div class="doc-info-item full">
-                        <span>Tebligat Adresi</span>
-                        <strong>${displayValue(customer.address)}</strong>
-                    </div>
+        <div class="doc-section">
+            <div class="doc-section-title">1. Taraf Bilgileri</div>
+            <div class="doc-info-grid">
+                <div class="doc-info-item full">
+                    <span>Hizmet Veren</span>
+                    <strong>${safe(serviceProvider.companyName)}</strong>
+                </div>
+                <div class="doc-info-item full">
+                    <span>Adres</span>
+                    <strong>${safe(serviceProvider.address)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi Dairesi</span>
+                    <strong>${safe(serviceProvider.taxOffice)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi No</span>
+                    <strong>${safe(serviceProvider.taxNumber)}</strong>
+                </div>
+                <div class="doc-info-item full">
+                    <span>E-Posta</span>
+                    <strong>${safe(serviceProvider.email)}</strong>
                 </div>
             </div>
 
-            <div class="doc-section">
-                <div class="doc-section-title">Seçilen Hizmet Kalemleri</div>
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Hizmet</th>
-                                <th>Adet</th>
-                                <th>Tutar</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${buildItemsTableRows(firstItemChunk, 0, summary.contractDurationMonths)}
-                        </tbody>
-                    </table>
+            <div class="doc-info-grid" style="margin-top:16px;">
+                <div class="doc-info-item full">
+                    <span>Hizmet Alan / Firma</span>
+                    <strong>${displayValue(customer.name, "Müşteri / Firma")}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>E-Posta</span>
+                    <strong>${displayValue(customer.email)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Telefon</span>
+                    <strong>${displayValue(customer.phone)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi Dairesi</span>
+                    <strong>${displayValue(customer.taxOffice)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi No</span>
+                    <strong>${displayValue(customer.taxNumber)}</strong>
+                </div>
+                <div class="doc-info-item full">
+                    <span>Tebligat Adresi</span>
+                    <strong>${displayValue(customer.address)}</strong>
                 </div>
             </div>
-        `);
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">2. Ön Protokolün Konusu</div>
+            <div class="doc-note">
+                İşbu ön protokolün konusu; Hizmet Veren tarafından Hizmet Alan’a sunulacak reklam, tanıtım, dijital medya yönetimi,
+                içerik üretimi, grafik ve görsel tasarım, medya planlama, sosyal medya yönetimi ve ilgili hizmetlerin kapsamı ile
+                ticari koşulların ön mutabakat altına alınmasıdır.
+            </div>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">3. Ön Protokol Süresi</div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>Başlangıç Tarihi</th>
+                            <td>${formatDate(getProtocolStartDate())}</td>
+                        </tr>
+                        <tr>
+                            <th>Bitiş Tarihi</th>
+                            <td>${formatDate(getProtocolEndDate())}</td>
+                        </tr>
+                        <tr>
+                            <th>Hizmet Süresi</th>
+                            <td>${safe(summary.contractDurationMonths, "0")} Ay</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">4. Hizmet Kapsamı</div>
+            <ol class="doc-list">
+                <li>Hizmet Veren, Hizmet Alan’a ait ${getSocialAccountsText()} için içerik planlama, paylaşım ve yönetim hizmeti sunacaktır.</li>
+                <li>Hizmet kapsamı seçilen paket ve hizmet kalemleri ile sınırlıdır.</li>
+                <li>Tarafların yazılı mutabakatı ile kapsam genişletilebilir veya daraltılabilir.</li>
+                <li>Sözleşme kapsamında ayrıca kararlaştırılmayan ek hizmetler ayrıca fiyatlandırılır.</li>
+            </ol>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">5. Seçilen Paket ve Hizmet Kalemleri</div>
+            <div class="doc-table-wrap" style="margin-bottom:14px;">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>Seçilen Paket</th>
+                            <td>${safe(getSelectedPackageName())}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Hizmet</th>
+                            <th>Adet</th>
+                            <th>Tutar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${buildItemsTableRows(firstItemChunk, 0, summary.contractDurationMonths)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `);
 
         if (itemChunks.length > 1) {
             for (let i = 1; i < itemChunks.length; i++) {
                 pages.push(`
-                    <div class="doc-title">Seçilen Hizmet Kalemleri</div>
-                    <div class="doc-subtitle">Devam eden hizmet listesi</div>
-
-                    <div class="doc-section">
-                        <div class="doc-table-wrap">
-                            <table class="doc-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Hizmet</th>
-                                        <th>Adet</th>
-                                        <th>Tutar</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${buildItemsTableRows(itemChunks[i], i * 12, summary.contractDurationMonths)}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `);
-            }
-        }
-
-        const firstInstallmentChunk = installmentChunks[0] || [];
-        pages.push(`
-            <div class="doc-title">Ödeme Özeti</div>
-            <div class="doc-subtitle">Ücretlendirme ve ödeme planı</div>
-
-            <div class="doc-section">
-                <div class="doc-section-title">Ödeme Planı Bilgileri</div>
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <tbody>
-                            <tr>
-                                <th>Ödeme Planı</th>
-                                <td>${summary.plan ? escapeHtml(summary.plan.name) : "-"}</td>
-                            </tr>
-                            <tr>
-                                <th>Sözleşme Süresi</th>
-                                <td>${summary.contractDurationMonths} Ay</td>
-                            </tr>
-                            <tr>
-                                <th>İndirim Oranı</th>
-                                <td>%${summary.appliedDiscountRate}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="doc-total-box">
-                    <div class="doc-total-row">
-                        <span>Brüt Toplam</span>
-                        <strong>${formatCurrency(summary.grossTotal)}</strong>
-                    </div>
-                    <div class="doc-total-row">
-                        <span>İndirim</span>
-                        <strong>${formatCurrency(summary.discountAmount)}</strong>
-                    </div>
-                    <div class="doc-total-row net">
-                        <span>Net Toplam</span>
-                        <strong>${formatCurrency(summary.netTotal)}</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="doc-section">
-                <div class="doc-section-title">Taksit Dağılımı</div>
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <thead>
-                            <tr>
-                                <th>Dönem</th>
-                                <th>Tutar</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${buildInstallmentRows(firstInstallmentChunk)}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="doc-note">
-                Bu belge teklif niteliğindedir. Nihai koşullar resmi sözleşme ile kesinleşir.
-            </div>
-        `);
-
-        if (installmentChunks.length > 1) {
-            for (let i = 1; i < installmentChunks.length; i++) {
-                pages.push(`
-                    <div class="doc-title">Taksit Dağılımı</div>
-                    <div class="doc-subtitle">Devam eden ödeme planı detayları</div>
-
-                    <div class="doc-section">
-                        <div class="doc-table-wrap">
-                            <table class="doc-table">
-                                <thead>
-                                    <tr>
-                                        <th>Dönem</th>
-                                        <th>Tutar</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${buildInstallmentRows(installmentChunks[i])}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `);
-            }
-        }
-
-        return pages;
-    }
-
-    function buildContractPages(customer, items, summary) {
-        const pages = [];
-        const itemChunks = chunkArray(items, 14);
-        const installmentChunks = chunkArray(summary.installments, 12);
-
-        pages.push(`
-            <div class="doc-title">Hizmet Sözleşmesi</div>
-            <div class="doc-subtitle">
-                İşbu sözleşme Ideio Creative ile hizmet alan müşteri arasında düzenlenmiştir.
-            </div>
-
-            <div class="doc-section">
-                <div class="doc-section-title">Taraf Bilgileri</div>
-                <div class="doc-info-grid">
-                    <div class="doc-info-item">
-                        <span>Hizmet Veren</span>
-                        <strong>Ideio Creative</strong>
-                    </div>
-                    <div class="doc-info-item">
-                        <span>Hizmet Alan</span>
-                        <strong>${displayValue(customer.name, "Müşteri / Firma")}</strong>
-                    </div>
-                    <div class="doc-info-item">
-                        <span>E-Posta / Telefon</span>
-                        <strong>${displayValue(customer.email)} / ${displayValue(customer.phone)}</strong>
-                    </div>
-                    <div class="doc-info-item">
-                        <span>Vergi Dairesi / Vergi No</span>
-                        <strong>${displayValue(customer.taxOffice)} / ${displayValue(customer.taxNumber)}</strong>
-                    </div>
-                    <div class="doc-info-item full">
-                        <span>Tebligat Adresi</span>
-                        <strong>${displayValue(customer.address)}</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="doc-section">
-                <div class="doc-section-title">Sözleşme Kapsamı</div>
-                <ol class="doc-list">
-                    <li>Hizmet Veren, aşağıda listelenen hizmetleri Hizmet Alan’a sunacaktır.</li>
-                    <li>Hizmet kapsamı, seçilen paketler ve alt paketler ile sınırlıdır.</li>
-                    <li>Taraflar, revize ve onay süreçlerinde yazılı iletişimi esas alacaktır.</li>
-                    <li>Ödeme, seçilen ödeme planına ve indirim şartlarına göre yapılacaktır.</li>
-                </ol>
-            </div>
-        `);
-
-        itemChunks.forEach((chunk, index) => {
-       pages.push(`
-                <div class="doc-title">Seçilen Hizmetler</div>
-                <div class="doc-subtitle">${index === 0 ? "Sözleşme kapsamına dahil hizmetler" : "Devam eden hizmet listesi"}</div>
+                <div class="doc-title">Seçilen Hizmet Kalemleri</div>
+                <div class="doc-subtitle">Devam eden hizmet listesi</div>
 
                 <div class="doc-section">
                     <div class="doc-table-wrap">
@@ -826,109 +1303,751 @@ function buildPaymentPlanSummary(planId, requestedDiscountRate) {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${buildItemsTableRows(chunk, index * 14, summary.contractDurationMonths)}
+                                ${buildItemsTableRows(itemChunks[i], i * 12, summary.contractDurationMonths)}
                             </tbody>
                         </table>
                     </div>
                 </div>
             `);
-   });
-
-        const firstInstallmentChunk = installmentChunks[0] || [];
-        pages.push(`
-            <div class="doc-title">Ücretlendirme ve Ödeme Planı</div>
-            <div class="doc-subtitle">Sözleşmeye ait ödeme özeti</div>
-
-            <div class="doc-section">
-                <div class="doc-section-title">Ödeme Bilgileri</div>
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <tbody>
-                            <tr>
-                                <th>Ödeme Planı</th>
-                                <td>${summary.plan ? escapeHtml(summary.plan.name) : "-"}</td>
-                            </tr>
-                            <tr>
-                                <th>Sözleşme Süresi</th>
-                                <td>${summary.contractDurationMonths} Ay</td>
-                            </tr>
-                            <tr>
-                                <th>İndirim Oranı</th>
-                                <td>%${summary.appliedDiscountRate}</td>
-                            </tr>
-                            <tr>
-                                <th>Brüt Toplam</th>
-                                <td>${formatCurrency(summary.grossTotal)}</td>
-                            </tr>
-                            <tr>
-                                <th>İndirim Tutarı</th>
-                                <td>${formatCurrency(summary.discountAmount)}</td>
-                            </tr>
-                            <tr>
-                                <th>Net Toplam</th>
-                                <td>${formatCurrency(summary.netTotal)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="doc-section">
-                <div class="doc-section-title">Taksit Planı</div>
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <thead>
-                            <tr>
-                                <th>Dönem</th>
-                                <th>Tutar</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${buildInstallmentRows(firstInstallmentChunk)}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `);
-
-        if (installmentChunks.length > 1) {
-            for (let i = 1; i < installmentChunks.length; i++) {
-                pages.push(`
-                    <div class="doc-title">Taksit Planı</div>
-                    <div class="doc-subtitle">Devam eden taksit bilgileri</div>
-
-                    <div class="doc-section">
-                        <div class="doc-table-wrap">
-                            <table class="doc-table">
-                                <thead>
-                                    <tr>
-                                        <th>Dönem</th>
-                                        <th>Tutar</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${buildInstallmentRows(installmentChunks[i])}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `);
             }
         }
 
         pages.push(`
-            <div class="doc-title">Hükümler ve İmzalar</div>
-            <div class="doc-subtitle">Tarafların genel mutabakat bölümü</div>
+        <div class="doc-title">Ticari Şartlar ve Ödeme Özeti</div>
+        <div class="doc-subtitle">Ücretlendirme, ödeme planı ve genel ticari koşullar</div>
 
+        <div class="doc-section">
+            <div class="doc-section-title">6. Ücretlendirme</div>
+            <ol class="doc-list">
+                <li>Aylık hizmet bedeli <strong>${getMonthlyFeeText()}</strong> olarak öngörülmüştür.</li>
+                <li>Toplam teklif tutarı, seçilen hizmet kalemleri ve uygulanan indirim oranına göre aşağıda belirtilmiştir.</li>
+                <li>Seçilen pakette reklam yönetimi bulunması halinde reklam bütçesi katkı oranı <strong>${getAdContributionText()}</strong> olarak uygulanacaktır.</li>
+                <li>Nihai fiyatlandırma, resmi sözleşme ve/veya fatura aşamasında kesinleşecektir.</li>
+            </ol>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">7. Ödeme Planı Bilgileri</div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>Ödeme Planı</th>
+                            <td>${getPaymentPlanText()}</td>
+                        </tr>
+                        <tr>
+                            <th>Sözleşme Süresi</th>
+                            <td>${safe(summary.contractDurationMonths, "0")} Ay</td>
+                        </tr>
+                        <tr>
+                            <th>İndirim Oranı</th>
+                            <td>%${safe(summary.appliedDiscountRate, "0")}</td>
+                        </tr>
+                        <tr>
+                            <th>Brüt Toplam</th>
+                            <td>${formatCurrency(summary.grossTotal || 0)}</td>
+                        </tr>
+                        <tr>
+                            <th>İndirim Tutarı</th>
+                            <td>${formatCurrency(summary.discountAmount || 0)}</td>
+                        </tr>
+                        <tr>
+                            <th>Net Toplam</th>
+                            <td>${formatCurrency(summary.netTotal || 0)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="doc-total-box">
+                <div class="doc-total-row">
+                    <span>Brüt Toplam</span>
+                    <strong>${formatCurrency(summary.grossTotal || 0)}</strong>
+                </div>
+                <div class="doc-total-row">
+                    <span>İndirim</span>
+                    <strong>${formatCurrency(summary.discountAmount || 0)}</strong>
+                </div>
+                <div class="doc-total-row net">
+                    <span>Net Toplam</span>
+                    <strong>${formatCurrency(summary.netTotal || 0)}</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">8. Taksit Dağılımı</div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr>
+                            <th>Dönem</th>
+                            <th>Tutar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${buildInstallmentRows(firstInstallmentChunk)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">9. Ödeme Hesap Bilgileri</div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>Banka Adı</th>
+                            <td>${safe(serviceProvider.bankName)}</td>
+                        </tr>
+                        <tr>
+                            <th>Hesap Sahibi</th>
+                            <td>${safe(serviceProvider.accountHolder)}</td>
+                        </tr>
+                        <tr>
+                            <th>IBAN</th>
+                            <td>${safe(serviceProvider.iban)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `);
+
+        if (installmentChunks.length > 1) {
+            for (let i = 1; i < installmentChunks.length; i++) {
+                pages.push(`
+                <div class="doc-title">Taksit Dağılımı</div>
+                <div class="doc-subtitle">Devam eden ödeme planı detayları</div>
+
+                <div class="doc-section">
+                    <div class="doc-table-wrap">
+                        <table class="doc-table">
+                            <thead>
+                                <tr>
+                                    <th>Dönem</th>
+                                    <th>Tutar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${buildInstallmentRows(installmentChunks[i])}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `);
+            }
+        }
+
+        pages.push(`
+        <div class="doc-title">Genel Şartlar ve Onay</div>
+        <div class="doc-subtitle">Ön mutabakat, gizlilik ve onay bölümü</div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">10. Genel Şartlar</div>
+            <ol class="doc-list">
+                <li>Bu belge ön protokol ve teklif niteliğindedir; nihai koşullar resmi sözleşme ve fatura ile kesinleşir.</li>
+                <li>Hizmet kapsamı dışında talep edilen tüm ek işler ayrıca fiyatlandırılır.</li>
+                <li>Taraflar arasında paylaşılacak ticari, stratejik ve operasyonel bilgiler gizli kabul edilir.</li>
+                <li>Hizmet performansı; erişim, etkileşim, satış dönüşümü veya ticari kazanç bakımından garanti teşkil etmez.</li>
+                <li>Resmi sözleşme imzalanması halinde bu ön protokol, sözleşme görüşmelerine esas ticari çerçeveyi oluşturur.</li>
+            </ol>
+        </div>
+
+        <div class="doc-section">
             <div class="doc-note">
-                Gizlilik, fesih, mücbir sebep ve uyuşmazlık çözümü gibi detay maddeler nihai sözleşme metninde ayrıca düzenlenebilir.
+                İşbu ön protokol, tarafların teklif kapsamı ve ticari koşullara ilişkin ön mutabakatını göstermek amacıyla hazırlanmıştır.
+            </div>
+        </div>
+
+        <div class="doc-signatures">
+            <div class="doc-sign-box">
+                <strong>Hizmet Veren</strong>
+                <br><br>
+                ${safe(serviceProvider.companyName)}
+                <br>
+                Yetkili: UĞUR FIRAT SOM
+            </div>
+            <div class="doc-sign-box">
+                <strong>Hizmet Alan</strong>
+                <br><br>
+                ${displayValue(customer.name, "Müşteri / Firma")}
+                <br>
+                Yetkili: ${displayValue(customer.authorizedPerson || customer.name, "Yetkili")}
+            </div>
+        </div>
+    `);
+
+        return pages;
+    }
+
+  function buildContractPages(customer, items, summary) {
+        const pages = [];
+
+        // Daha güvenli satır adetleri:
+        // Uzun hizmet isimleri / uzun taksit satırları taşma yapmasın diye düşürüldü.
+        const ITEM_ROWS_PER_PAGE = 9999;
+        const INSTALLMENT_ROWS_PER_PAGE = 9999;
+        const LIST_ITEMS_PER_PAGE = 9999;
+
+        const itemChunks = chunkArray(items || [], ITEM_ROWS_PER_PAGE);
+        const installmentChunks = chunkArray(summary.installments || [], INSTALLMENT_ROWS_PER_PAGE);
+
+        const serviceProvider = {
+            companyName: "Ideio Creative Tasarım Reklamcılık Sosyal Medya Hizmetleri Sanayi ve Ticaret Limited Şirketi",
+            address: "Mansuroğlu, 287. Sk. No:6 Daire:2, 35530 Bayraklı/İzmir",
+            taxOffice: "Bornova Vergi Dairesi",
+            taxNumber: "4651560067",
+            email: "info@ideiocreative.com"
+        };
+
+        function safe(val, fallback = "-") {
+            if (val === null || val === undefined) return fallback;
+            const str = String(val).trim();
+            return str ? escapeHtml(str) : fallback;
+        }
+
+        function formatDate(val, fallback = "..... / ..... / ..........") {
+            if (!val) return fallback;
+
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                const day = String(d.getDate()).padStart(2, "0");
+                const month = String(d.getMonth() + 1).padStart(2, "0");
+                const year = d.getFullYear();
+                return `${day}.${month}.${year}`;
+            }
+
+            return escapeHtml(String(val));
+        }
+
+        function getContractStartDate() {
+            return summary.contractStartDate || summary.startDate || summary.firstPaymentDate || "";
+        }
+
+        function getContractEndDate() {
+            if (summary.contractEndDate) return summary.contractEndDate;
+
+            const start = getContractStartDate();
+            const months = Number(summary.contractDurationMonths || 0);
+
+            if (start && months > 0) {
+                const d = new Date(start);
+                if (!isNaN(d.getTime())) {
+                    d.setMonth(d.getMonth() + months);
+                    return d;
+                }
+            }
+
+            return "";
+        }
+
+        function getSelectedPackageName() {
+            if (summary.selectedPackageName) return summary.selectedPackageName;
+            if (summary.plan && summary.plan.name) return summary.plan.name;
+            return "Seçilen Paket";
+        }
+
+        function getPaymentTypeText() {
+            if (summary.plan && summary.plan.name) return escapeHtml(summary.plan.name);
+            return "Belirlenen ödeme planına göre";
+        }
+
+        function getPaymentDayText() {
+            return safe(summary.paymentDay, "...");
+        }
+
+        function getFirstPaymentDateText() {
+            return formatDate(summary.firstPaymentDate, "..... / ..... / ..........");
+        }
+
+        function getMonthlyFeeText() {
+            if (summary.monthlyFee !== undefined && summary.monthlyFee !== null) {
+                return `${formatCurrency(summary.monthlyFee)} + KDV`;
+            }
+
+            if ((summary.contractDurationMonths || 0) > 0 && (summary.netTotal || 0) > 0) {
+                const monthly = Number(summary.netTotal) / Number(summary.contractDurationMonths);
+                return `${formatCurrency(monthly)} + KDV`;
+            }
+
+            return `${formatCurrency(summary.netTotal || 0)} + KDV`;
+        }
+
+        function getSocialAccountsText() {
+            const accounts = [];
+
+            if (customer.instagram) accounts.push(`${escapeHtml(customer.instagram)} Instagram hesabı`);
+            if (customer.youtube) accounts.push(`${escapeHtml(customer.youtube)} YouTube hesabı`);
+            if (customer.tiktok) accounts.push(`${escapeHtml(customer.tiktok)} TikTok hesabı`);
+            if (customer.facebook) accounts.push(`${escapeHtml(customer.facebook)} Facebook hesabı`);
+            if (customer.linkedin) accounts.push(`${escapeHtml(customer.linkedin)} LinkedIn hesabı`);
+
+            if (!accounts.length) {
+                return "Hizmet Alan’a ait sosyal medya hesapları";
+            }
+
+            if (accounts.length === 1) return accounts[0];
+            if (accounts.length === 2) return `${accounts[0]} ve ${accounts[1]}`;
+
+            return `${accounts.slice(0, -1).join(", ")} ve ${accounts[accounts.length - 1]}`;
+        }
+
+        function getPackagePreferenceRows() {
+            const selected = getSelectedPackageName().toLowerCase();
+
+            const packageRows = [
+                { name: "Ek–1: Sosyal Medya Paketi (Temel)", matchers: ["temel"] },
+                { name: "Ek–2: Sosyal Medya Paketleri (Prodüksiyonsuz)", matchers: ["prodüksiyonsuz", "produksiyonsuz"] },
+                { name: "Ek–3: İçerik Üretim Paketleri", matchers: ["içerik", "icerik"] },
+                { name: "Ek–4: Dijital Pazarlama Paketi", matchers: ["dijital", "pazarlama"] }
+            ];
+
+            return packageRows.map((pkg) => {
+                const isSelected =
+                    pkg.matchers.some(x => selected.includes(x)) ||
+                    selected.includes(pkg.name.toLowerCase());
+
+                return `
+                <tr>
+                    <th>${pkg.name}</th>
+                    <td>${isSelected ? "[Tercih Edilmiştir]" : "[Tercih Edilmemiştir]"}</td>
+                </tr>
+            `;
+            }).join("");
+        }
+
+        function getAdContributionText() {
+            if (summary.adBudgetContributionRate !== undefined && summary.adBudgetContributionRate !== null) {
+                return `%${escapeHtml(String(summary.adBudgetContributionRate))}`;
+            }
+
+            const selected = getSelectedPackageName().toLowerCase();
+            if (selected.includes("temel")) return "%20";
+            if (selected.includes("pro")) return "%0";
+            if (selected.includes("premium")) return "%0";
+
+            return "%0";
+        }
+
+        function pushPage(title, subtitle, content) {
+            pages.push(`
+            <div class="doc-title">${title}</div>
+            <div class="doc-subtitle">${subtitle}</div>
+            ${content}
+        `);
+        }
+
+        function buildClausePage(title, subtitle, content) {
+            pushPage(title, subtitle, content);
+        }
+
+        function buildListPages(title, subtitle, sectionTitle, listItems, startNumber, perPage = LIST_ITEMS_PER_PAGE) {
+            const chunks = chunkArray(listItems, perPage);
+
+            chunks.forEach((chunk, pageIndex) => {
+                const pageStart = startNumber + (pageIndex * perPage);
+
+                pushPage(
+                    title,
+                    pageIndex === 0 ? subtitle : "Devamı",
+                    `
+                <div class="doc-section">
+                    <div class="doc-section-title">
+                        ${sectionTitle}${pageIndex > 0 ? " (Devam)" : ""}
+                    </div>
+                    <ol class="doc-list" start="${pageStart}">
+                        ${chunk.map(item => `<li>${item}</li>`).join("")}
+                    </ol>
+                </div>
+                `
+                );
+            });
+        }
+
+        // 1) Kapak + Taraflar
+        buildClausePage(
+            "Sosyal Medya Yönetimi ve Reklam Sözleşmesi",
+            "İşbu sözleşme Hizmet Veren ile Hizmet Alan arasında düzenlenmiştir.",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">1. Sözleşme Tarafları</div>
+
+            <div class="doc-info-grid">
+                <div class="doc-info-item full">
+                    <span>Hizmet Veren</span>
+                    <strong>${safe(serviceProvider.companyName)}</strong>
+                </div>
+                <div class="doc-info-item full">
+                    <span>Adres</span>
+                    <strong>${safe(serviceProvider.address)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi Dairesi</span>
+                    <strong>${safe(serviceProvider.taxOffice)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi Numarası</span>
+                    <strong>${safe(serviceProvider.taxNumber)}</strong>
+                </div>
+                <div class="doc-info-item full">
+                    <span>E-Posta</span>
+                    <strong>${safe(serviceProvider.email)}</strong>
+                </div>
+            </div>
+
+            <div class="doc-info-grid" style="margin-top:16px;">
+                <div class="doc-info-item full">
+                    <span>Hizmet Alan</span>
+                    <strong>${safe(customer.name, "Müşteri / Firma")}</strong>
+                </div>
+                <div class="doc-info-item full">
+                    <span>Adres</span>
+                    <strong>${safe(customer.address)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi Dairesi</span>
+                    <strong>${safe(customer.taxOffice)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Vergi Numarası</span>
+                    <strong>${safe(customer.taxNumber)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>E-Posta</span>
+                    <strong>${safe(customer.email)}</strong>
+                </div>
+                <div class="doc-info-item">
+                    <span>Telefon</span>
+                    <strong>${safe(customer.phone)}</strong>
+                </div>
+            </div>
+        </div>
+        `
+        );
+
+        // 2) Konu + Süre
+        buildClausePage(
+            "Sözleşmenin Konusu ve Süresi",
+            "Sözleşmenin dayanağı, konusu ve yürürlük süresi",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">2. Sözleşmenin Konusu</div>
+            <ol class="doc-list">
+                <li>İşbu sözleşmenin konusu, Hizmet Veren tarafından Hizmet Alan’a reklam, tanıtım, dijital medya yönetimi, içerik üretimi, grafik ve görsel tasarım, medya planlama ve uygulama, sosyal medya yönetimi ile ilgili hizmetlerin sağlanmasına ilişkin usul ve esasların belirlenmesidir.</li>
+            </ol>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">3. Sözleşme Süresi</div>
+            <ol class="doc-list">
+                <li>İşbu sözleşme <strong>${formatDate(getContractStartDate())}</strong> tarihinde yürürlüğe girer ve <strong>${formatDate(getContractEndDate())}</strong> tarihinde sona erer.</li>
+                <li>Taraflardan herhangi biri, sözleşme süresinin sona ermesinden en az 30 gün önce yazılı olarak sözleşmenin yenilenmeyeceğini bildirmediği takdirde, sözleşme aynı bedel, şart ve koşullarla, mevcut sözleşme süresi kadar birbirini izleyen dönemler halinde kendiliğinden uzamış sayılır.</li>
+            </ol>
+        </div>
+        `
+        );
+
+        // 3) Hizmet kapsamı
+        buildClausePage(
+            "Hizmetin Kapsamı",
+            "Seçilen paketler ve sosyal medya hesapları",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">4. Hizmetin Kapsamı</div>
+            <ol class="doc-list">
+                <li>Hizmet Veren, işbu sözleşme kapsamında Hizmet Alan’a ait olan ${getSocialAccountsText()} yönetimi ile içerik planlamasını, <strong>${safe(getSelectedPackageName())}</strong> çerçevesinde yürütmeyi kabul ve taahhüt eder.</li>
+                <li>İşbu sözleşmeye ek olarak düzenlenen paket tercih durumu aşağıdaki gibidir:</li>
+            </ol>
+
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <tbody>
+                        ${getPackagePreferenceRows()}
+                    </tbody>
+                </table>
+            </div>
+
+            <ol class="doc-list" start="3">
+                <li>Hizmetin kapsamı tarafların yazılı mutabakatı ile genişletilebilir veya daraltılabilir.</li>
+                <li>Tercih edilmeyen paketler, sözleşmenin eki olmakla birlikte taraflar açısından herhangi bir hak ve yükümlülük doğurmaz.</li>
+                <li>Hizmetin kapsamına girmeyen işler bakımından Hizmet Veren herhangi bir sorumluluk altına girmez.</li>
+            </ol>
+        </div>
+        `
+        );
+
+        // 4) Seçilen hizmetler tablosu
+        itemChunks.forEach((chunk, index) => {
+            pushPage(
+                "Seçilen Hizmetler",
+                index === 0 ? "Sözleşme kapsamına dahil hizmetler" : "Devam eden hizmet listesi",
+                `
+            <div class="doc-section">
+                <div class="doc-table-wrap">
+                    <table class="doc-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Hizmet</th>
+                                <th>Adet</th>
+                                <th>Tutar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${buildItemsTableRows(chunk, index * ITEM_ROWS_PER_PAGE, summary.contractDurationMonths)}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            `
+            );
+        });
+
+        // 5A) Ücretlendirme metni
+        buildClausePage(
+            "Ücretlendirme ve Ödeme Planı",
+            "Sözleşmeye ait ücretlendirme bilgileri",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">5. Ücretlendirme ve Ödeme</div>
+            <ol class="doc-list">
+                <li>Hizmet bedeli, aylık olarak <strong>${getMonthlyFeeText()}</strong> olarak belirlenmiştir.</li>
+                <li>Hizmet Alan, işbu sözleşme kapsamında belirlenen hizmet bedelini, ilk ödeme <strong>${getFirstPaymentDateText()}</strong> tarihinde yapılmak üzere peşin olarak ödemeyi kabul ve taahhüt eder. Bu tarihten sonraki ödemeler ise her ayın <strong>${getPaymentDayText()}</strong>. günü vade tarihi olmak üzere Hizmet Veren’in banka hesabına yapılır.</li>
+                <li>Tercih edilen paketin içeriğinde reklam hizmeti bulunması halinde, reklam bütçesi katkı payı oranı <strong>${getAdContributionText()}</strong> olarak uygulanır.</li>
+                <li>Ödemelerin belirtilen tarihlerde yapılmaması halinde, Hizmet Alan temerrüde düşmüş sayılır ve Hizmet Veren, vade tarihinden itibaren aylık %3 gecikme faizi talep etme hakkına sahiptir.</li>
+                <li>Ödeme gecikmesinin 30 günü aşması halinde Hizmet Veren işlerini durdurabilir; 45 günü aşması halinde sözleşmeyi haklı nedenle feshedebilir.</li>
+            </ol>
+        </div>
+        `
+        );
+
+        // 5B) Ödeme özeti + banka bilgileri
+        buildClausePage(
+            "Ücretlendirme ve Ödeme Planı",
+            "Ödeme özeti ve banka bilgileri",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">Ödeme Özeti</div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>Ödeme Planı</th>
+                            <td>${getPaymentTypeText()}</td>
+                        </tr>
+                        <tr>
+                            <th>Sözleşme Süresi</th>
+                            <td>${safe(summary.contractDurationMonths, "-")} Ay</td>
+                        </tr>
+                        <tr>
+                            <th>İndirim Oranı</th>
+                            <td>%${safe(summary.appliedDiscountRate, "0")}</td>
+                        </tr>
+                        <tr>
+                            <th>Brüt Toplam</th>
+                            <td>${formatCurrency(summary.grossTotal || 0)}</td>
+                        </tr>
+                        <tr>
+                            <th>İndirim Tutarı</th>
+                            <td>${formatCurrency(summary.discountAmount || 0)}</td>
+                        </tr>
+                        <tr>
+                            <th>Net Toplam</th>
+                            <td>${formatCurrency(summary.netTotal || 0)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">Banka Hesap Bilgileri</div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>Banka Adı</th>
+                            <td>Garanti Bankası</td>
+                        </tr>
+                        <tr>
+                            <th>Hesap Sahibi</th>
+                            <td>IDEIOCREATIVE Tasarım Reklamcılık Sosyal Medya Hiz. San. ve Tic. Ltd. Şti.</td>
+                        </tr>
+                        <tr>
+                            <th>IBAN</th>
+                            <td>TR11 0006 2001 2750 0006 2961 41</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        `
+        );
+
+        // 5C) Taksit planı
+        if (installmentChunks.length > 0) {
+            installmentChunks.forEach((chunk, index) => {
+                pushPage(
+                    "Ücretlendirme ve Ödeme Planı",
+                    index === 0 ? "Taksit planı" : "Taksit planı devamı",
+                    `
+                <div class="doc-section">
+                    <div class="doc-section-title">Taksit Planı${index > 0 ? " (Devam)" : ""}</div>
+                    <div class="doc-table-wrap">
+                        <table class="doc-table">
+                            <thead>
+                                <tr>
+                                    <th>Dönem</th>
+                                    <th>Tutar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${buildInstallmentRows(chunk)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                `
+                );
+            });
+        }
+
+        // 6) Hizmet Veren yükümlülükleri - otomatik sayfalama
+        buildListPages(
+            "Hizmet Verenin Hak ve Yükümlülükleri",
+            "Ajans tarafının sorumluluk ve sınırları",
+            "6. Hizmet Verenin Hak ve Yükümlülükleri",
+            [
+                "Hizmet Veren, işbu sözleşme kapsamındaki hizmetleri mesleki bilgi ve tecrübesi doğrultusunda gerekli özeni göstererek ifa etmeyi kabul eder.",
+                "Sözleşme kapsamında açıkça belirtilmeyen her türlü ek hizmet ayrıca fiyatlandırılır.",
+                "Her bir video kurgusu en fazla 90 saniye ile sınırlıdır.",
+                "Her video için en fazla 1 revize hakkı tanınır; ilave revizeler ayrıca fiyatlandırılır.",
+                "Müzik seçimi Hizmet Alan tarafından önerilmezse Hizmet Veren tarafından seçilir; Hizmet Alan tarafından seçilen müziklerde telif sorumluluğu Hizmet Alan’a aittir.",
+                "Gün içerisinde çekilen videolar aynı gün teslim edilmez; teslim süresi 3 ila 5 iş günü arasındadır.",
+                "Prodüksiyonsuz paketler haricinde, Hizmet Veren tarafından gerçekleştirilmeyen çekimlere ilişkin kurgu veya düzenleme işleri ayrıca fiyatlandırılır.",
+                "Çekimlerin Hizmet Alan’ın kusuru, ihmali veya ertelemesi sebebiyle yapılamaması halinde, çekim yapılmış sayılır; ancak Hizmet Alan’a ayda yalnızca bir kez erteleme hakkı tanınır.",
+                "Reklam stratejisinin planlanması ve yönetimi Hizmet Veren tarafından yapılır; ancak bütçenin yetersizliği veya geç aktarılmasından doğan sonuçlardan Hizmet Veren sorumlu tutulamaz.",
+                "Hizmet Veren, reklam performansı, erişim, etkileşim, satış dönüşümü, ticari kazanç veya müşteri sayısı konusunda herhangi bir garanti vermez.",
+                "Hazırlanan içerik, tasarım, video ve raporlar, hizmet bedelinin tam olarak ödenmesi koşuluyla Hizmet Alan’a devredilmiş sayılır.",
+                "Hizmet Veren’in, sözleşmede ayrıca yazılı şekilde kararlaştırılmadıkça gelen mesajlara cevap verme veya yorum yönetimi yükümlülüğü bulunmamaktadır."
+            ],
+            1,
+            LIST_ITEMS_PER_PAGE
+        );
+
+        // 7) Hizmet Alan yükümlülükleri - otomatik sayfalama
+        buildListPages(
+            "Hizmet Alanın Hak ve Yükümlülükleri",
+            "Müşteri tarafının yükümlülükleri",
+            "7. Hizmet Alanın Hak ve Yükümlülükleri",
+            [
+                "Hizmet Alan, sözleşme kapsamında belirlenen hizmetlerin eksiksiz ve zamanında ifa edilmesini talep etme hakkına sahiptir.",
+                "Hizmet Alan, iletilen içerikleri en geç 1 iş günü içinde onaylamak veya revize taleplerini bildirmekle yükümlüdür. Bu süre içinde dönüş yapılmazsa içerik onaylanmış sayılır.",
+                "Hizmet Alan, sözleşme süresince gerekli veri, bilgi ve belgeleri zamanında ve eksiksiz şekilde sağlamakla yükümlüdür.",
+                "Hizmet Alan, sözleşmede kararlaştırılan hizmet bedellerini tam ve zamanında ödemekle yükümlüdür.",
+                "Sosyal medya hesap yönetimi hizmeti bulunması halinde, Hizmet Alan kullanıcı adı ve şifre bilgilerini Hizmet Veren’e sağlamayı kabul eder.",
+                "Sosyal medya platformlarının teknik arızaları, güncellemeleri, algoritma değişiklikleri, üçüncü kişi müdahaleleri, hesap güvenliği sorunları veya Hizmet Alan kaynaklı işlemler nedeniyle oluşan zararlardan Hizmet Veren sorumlu tutulamaz.",
+                "Hizmet Veren’in sorumluluğu yalnızca kendisi veya yetkilendirdiği personeli tarafından kasten ya da ağır ihmal ile yapılan işlemlerle sınırlıdır."
+            ],
+            1,
+            LIST_ITEMS_PER_PAGE
+        );
+
+        // 8-9) Genel hükümler ilk sayfa
+        buildClausePage(
+            "Genel Hükümler",
+            "Gizlilik ve fesih hükümleri",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">8. Gizlilik ve Sır Saklama Yükümlülüğü</div>
+            <ol class="doc-list">
+                <li>Tarafların birbirleriyle paylaşacağı her türlü yazılı, sözlü, görsel, dijital veya fiziki bilgi “Gizli Bilgi” sayılır.</li>
+                <li>Taraflar, gizli bilgileri yalnızca sözleşmenin amacı doğrultusunda kullanmayı ve üçüncü kişilere açıklamamayı taahhüt eder.</li>
+                <li>Gizlilik yükümlülüğü, sözleşme sona erse dahi 3 yıl süreyle devam eder.</li>
+                <li>Gizlilik yükümlülüğünün ihlali halinde diğer taraf sözleşmeyi haklı nedenle feshedebilir ve zararlarının tazminini talep edebilir.</li>
+            </ol>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">9. Haksız Fesih ve Cezai Şart</div>
+            <ol class="doc-list">
+                <li>Hizmet Alan, sözleşme süresi sona ermeden ve haklı bir sebep olmaksızın sözleşmeyi feshederse, bakiye hizmet bedelinin %25’ini Hizmet Veren’e ödemeyi kabul eder.</li>
+                <li>Hizmet Veren’in esaslı yükümlülüklerini üst üste 45 gün boyunca yerine getirmemesi ve yazılı ihtara rağmen 5 iş günü içinde bu eksiklikleri gidermemesi halinde, Hizmet Alan sözleşmeyi haklı nedenle feshedebilir.</li>
+            </ol>
+        </div>
+        `
+        );
+
+        // 10-11) Genel hükümler ikinci sayfa
+        buildClausePage(
+            "Genel Hükümler",
+            "Mücbir sebep ve uyuşmazlık çözümü",
+            `
+        <div class="doc-section">
+            <div class="doc-section-title">10. Mücbir Sebep</div>
+            <ol class="doc-list">
+                <li>Doğal afet, savaş, terör, grev, salgın hastalık, internet veya enerji kesintileri, sosyal medya platformları veya üçüncü taraf servis sağlayıcılardaki kesintiler ile kamu otoriteleri kararları mücbir sebep sayılır.</li>
+                <li>Mücbir sebep halinde etkilenen taraf durumu diğer tarafa yazılı olarak bildirir ve yükümlülükler askıya alınır.</li>
+                <li>Mücbir sebep halinin 60 günü aşması halinde taraflardan her biri sözleşmeyi tazminatsız olarak feshedebilir.</li>
+            </ol>
+        </div>
+
+        <div class="doc-section">
+            <div class="doc-section-title">11. Uyuşmazlıkların Çözümü</div>
+            <ol class="doc-list">
+                <li>İşbu sözleşmenin uygulanmasından doğacak uyuşmazlıklarda İzmir Mahkemeleri ve İcra Daireleri yetkilidir.</li>
+                <li>İşbu sözleşme taraflarca okunup kabul edilerek imza altına alınır.</li>
+            </ol>
+        </div>
+        `
+        );
+
+        // 12) İmzalar
+        buildClausePage(
+            "İmzalar",
+            "Tarafların kabul ve onay bölümü",
+            `
+        <div class="doc-section">
+            <div class="doc-note">
+                İşbu sözleşme taraflar arasında okunmuş, anlaşılmış ve kabul edilmiştir.
+            </div>
+
+            <div class="doc-table-wrap" style="margin-top:18px;">
+                <table class="doc-table">
+                    <tbody>
+                        <tr>
+                            <th>İmza Tarihi</th>
+                            <td>${formatDate(summary.signatureDate || getContractStartDate())}</td>
+                        </tr>
+                        <tr>
+                            <th>Hizmet Veren Yetkilisi</th>
+                            <td>UĞUR FIRAT SOM</td>
+                        </tr>
+                        <tr>
+                            <th>Hizmet Alan Yetkilisi</th>
+                            <td>${safe(customer.authorizedPerson || customer.name, "Yetkili")}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
             <div class="doc-signatures">
-                <div class="doc-sign-box">Hizmet Veren</div>
-                <div class="doc-sign-box">${displayValue(customer.name, "Hizmet Alan")}</div>
+                <div class="doc-sign-box">
+                    IDEIO CREATIVE TASARIM REKLAMCILIK SOSYAL MEDYA HİZMETLERİ SANAYİ VE TİCARET LİMİTED ŞİRKETİ
+                    <br><br>
+                    Yetkili: UĞUR FIRAT SOM
+                </div>
+                <div class="doc-sign-box">
+                    ${safe(customer.name, "Hizmet Alan")}
+                    <br><br>
+                    Yetkili: ${safe(customer.authorizedPerson || customer.name, "Yetkili")}
+                </div>
             </div>
-        `);
+        </div>
+        `
+        );
 
         return pages;
     }
@@ -992,6 +2111,7 @@ function buildPaymentPlanSummary(planId, requestedDiscountRate) {
         updateHiddenInputs(summary);
     }
 
+
     function renderBillingPreview() {
         if (!billingPreviewArea) return;
 
@@ -1007,9 +2127,7 @@ function buildPaymentPlanSummary(planId, requestedDiscountRate) {
    ? "Hizmet Sözleşmesi"
    : "Ön Protokol";
 
-        const finalPages = rawPages.map((body, index) =>
-       buildPdfPage(body, index + 1, rawPages.length, docLabel)
-   );
+        const finalPages = buildAutoPaginatedPages(rawPages, docLabel);
 
         billingPreviewArea.innerHTML = `<div class="document-preview-pages">${finalPages.join("")}</div>`;
 
@@ -1288,9 +2406,7 @@ function buildPaymentPlanSummary(planId, requestedDiscountRate) {
    : "";
 
             bottomTotalSubtext.textContent = `Sözleşme süresi: ${summary.contractDurationMonths} ay${discountText}`;
-        } else {
-            bottomTotalSubtext.textContent = "Seçim yaptıkça toplam burada güncellenir.";
-        }
+        } 
     }
 
     function refreshStepHeaders() {

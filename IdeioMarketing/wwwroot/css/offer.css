@@ -279,7 +279,7 @@ textarea.modern-input {
 
     .selection-card .card-price {
         font-size: 28px;
-        font-weight: 800;
+        /*font-weight: 800;*/
         color: #111b2a;
         line-height: 1.1;
         margin-bottom: 14px;
@@ -701,7 +701,7 @@ textarea.modern-input {
 .billing-preview-stage {
     padding: 20px;
     overflow: auto;
-    max-height: calc(100vh - 260px);
+    max-height: calc(100vh);
     overscroll-behavior: contain;
 }
 
@@ -1406,4 +1406,30 @@ textarea.modern-input {
     .section-title {
         font-size: 20px;
     }
+}
+
+.document-pagination-sandbox {
+    position: fixed;
+    left: -100000px;
+    top: 0;
+    width: 210mm;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+}
+
+    .document-pagination-sandbox .document-preview-page {
+        margin: 0 0 18px;
+        box-shadow: none;
+    }
+
+.doc-flow-heading,
+.doc-free-text-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.page-number-text {
+    white-space: nowrap;
 }
