@@ -22,7 +22,7 @@ namespace IdeioMarketing.MarketingFeature.Entities
         public int StatusId { get; set; }
         public int TemperatureId { get; set; }
         public int StageId { get; set; }
-
+        
         public decimal Value { get; set; }
         public DateTime Date { get; set; }
         public string? Note { get; set; }
