@@ -1,0 +1,11 @@
+@using System.Text.Json
+@using IdeioMarketing.MarketingFeature.Content
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    Layout = null;
+
+    var token = Antiforgery.GetAndStoreTokens(Context).RequestToken ?? string.Empty;
+    var tokenJson = JsonSerializer.Serialize(token);
+    var html = MarketingHtmlTemplate.Render(tokenJson);
+}
+@Html.Raw(html)

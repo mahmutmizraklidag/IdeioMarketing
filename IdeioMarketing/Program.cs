@@ -94,9 +94,10 @@ app.MapControllerRoute(
            name: "areas",
            pattern: "{area:exists}/{controller=Main}/{action=Index}/{id?}"
          );
+app.MapGet("/", () => Results.Redirect("/marketing"));
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Offer}/{action=Index}/{id?}")
+    pattern: "{controller=Marketing}/{action=Index}/{id?}")
     .WithStaticAssets();
 
 
