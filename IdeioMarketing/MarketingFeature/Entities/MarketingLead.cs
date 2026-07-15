@@ -47,6 +47,10 @@ namespace IdeioMarketing.MarketingFeature.Entities
         // Liste veya kanban görünümündeki sıralama değeridir.
         public int SortOrder { get; set; }
 
+        // Kaydın pipeline (kanban) ekranında gösterilip gösterilmeyeceğini belirtir.
+        // Yeni kayıtlar varsayılan olarak pipeline'a dahil edilir.
+        public bool IsInPipeline { get; set; } = true;
+
         // Kaydın oluşturulma tarihidir.
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 

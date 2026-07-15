@@ -477,7 +477,8 @@ namespace IdeioMarketing.MarketingFeature.Content
             using var input = new MemoryStream(compressed);
             using var gzip = new GZipStream(input, CompressionMode.Decompress);
             using var reader = new StreamReader(gzip, Encoding.UTF8);
-            return reader.ReadToEnd().Replace(TokenPlaceholder, tokenJson, StringComparison.Ordinal);
+            var html = MarketingPipelineHtmlEnhancement.Apply(reader.ReadToEnd());
+            return html.Replace(TokenPlaceholder, tokenJson, StringComparison.Ordinal);
         }
     }
 }

@@ -132,6 +132,7 @@ namespace IdeioMarketing.Controllers
                 lead.Date = ResolveDate(item.Date);
                 lead.Note = item.Note?.Trim() ?? string.Empty;
                 lead.SortOrder = i + 1;
+                lead.IsInPipeline = MarketingPipelineVisibility.Resolve(item.InPipeline);
                 lead.UpdatedAt = now;
 
                 var ownerNames = (item.Owners ?? new List<string>())
@@ -214,6 +215,7 @@ namespace IdeioMarketing.Controllers
                     .Select(x => x.MarketingOwner.Name)
                     .ToList(),
                 stage = lead.Stage.Key,
+                inPipeline = lead.IsInPipeline,
                 date = lead.Date.ToString("yyyy-MM-dd"),
                 note = lead.Note ?? string.Empty
             };
@@ -272,6 +274,7 @@ namespace IdeioMarketing.Controllers
             public decimal Value { get; set; }
             public List<string>? Owners { get; set; }
             public string? Stage { get; set; }
+            public bool? InPipeline { get; set; }
             public string? Date { get; set; }
             public string? Note { get; set; }
         }
