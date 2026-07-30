@@ -13,11 +13,11 @@ namespace IdeioMarketing.Controllers
             PropertyNameCaseInsensitive = true
         };
 
-        private readonly IConfiguration _configuration;
+        private readonly MarketingDatabaseContext _context;
 
-        public MarketingController(IConfiguration configuration)
+        public MarketingController(MarketingDatabaseContext context)
         {
-            _configuration = configuration;
+            _context = context;
         }
 
         [HttpGet]
@@ -29,8 +29,7 @@ namespace IdeioMarketing.Controllers
         [HttpGet]
         public async Task<IActionResult> StorageGet(string? key)
         {
-            await using var context = CreateContext();
-            var leads = await context.MarketingLeads
+            var leads = await _context.MarketingLeads
                 .AsNoTracking()
                 .Include(x => x.Source)
                 .Include(x => x.Status)
@@ -49,32 +48,14 @@ namespace IdeioMarketing.Controllers
         [HttpPost]
         public async Task<IActionResult> StorageSet([FromBody] MarketingStorageSetRequest request)
         {
-            await using var context = CreateContext();
             var incoming = string.IsNullOrWhiteSpace(request.Value)
                 ? new List<MarketingLeadStoragePayload>()
                 : JsonSerializer.Deserialize<List<MarketingLeadStoragePayload>>(request.Value, JsonOptions) ?? new List<MarketingLeadStoragePayload>();
 
-            await SyncStorageLeads(context, incoming);
-            await context.SaveChangesAsync();
+            await SyncStorageLeads(_context, incoming);
+            await _context.SaveChangesAsync();
 
             return Json(new { success = true });
-        }
-
-        private MarketingDatabaseContext CreateContext()
-        {
-            var options = new DbContextOptionsBuilder<MarketingDatabaseContext>()
-                .UseSqlServer(GetMarketingConnectionString(_configuration))
-                .Options;
-
-            return new MarketingDatabaseContext(options);
-        }
-
-        private static string GetMarketingConnectionString(IConfiguration configuration)
-        {
-            var connectionString = configuration.GetConnectionString("SqlServer") ?? string.Empty;
-            return connectionString.Contains("Encrypt=", StringComparison.OrdinalIgnoreCase)
-                ? connectionString
-                : connectionString.TrimEnd(';') + ";Encrypt=False;";
         }
 
         private static async Task SyncStorageLeads(MarketingDatabaseContext context, List<MarketingLeadStoragePayload> incoming)
@@ -130,9 +111,10 @@ namespace IdeioMarketing.Controllers
                 lead.StageId = ResolveStageId(item.Stage, stages);
                 lead.Value = item.Value;
                 lead.Date = ResolveDate(item.Date);
-                lead.Note = item.Note?.Trim() ?? string.Empty;
+                var isInPipeline = MarketingPipelineVisibility.Resolve(item.InPipeline);
+                lead.Note = MarketingPipelineVisibility.EncodeNote(item.Note?.Trim(), isInPipeline);
                 lead.SortOrder = i + 1;
-                lead.IsInPipeline = MarketingPipelineVisibility.Resolve(item.InPipeline);
+                lead.IsInPipeline = isInPipeline;
                 lead.UpdatedAt = now;
 
                 var ownerNames = (item.Owners ?? new List<string>())
@@ -215,9 +197,9 @@ namespace IdeioMarketing.Controllers
                     .Select(x => x.MarketingOwner.Name)
                     .ToList(),
                 stage = lead.Stage.Key,
-                inPipeline = lead.IsInPipeline,
+                inPipeline = MarketingPipelineVisibility.ResolveFromNote(lead.Note),
                 date = lead.Date.ToString("yyyy-MM-dd"),
-                note = lead.Note ?? string.Empty
+                note = MarketingPipelineVisibility.DecodeNote(lead.Note)
             };
         }
 

@@ -14,6 +14,13 @@ namespace IdeioMarketing.MarketingFeature.Content
   .action-btn.pipeline-add{color:var(--green);background:rgba(57,192,122,.10);}
   .action-btn.pipeline-add:hover{border-color:var(--green);background:rgba(57,192,122,.18);color:#fff;}
   body.pipeline-list-view th.actions,body.pipeline-list-view td.actions{min-width:285px;}
+  .pipeline-filters{align-items:flex-end;margin-bottom:16px;}
+  .pipeline-filter-field{display:flex;min-width:180px;flex:1;flex-direction:column;gap:6px;}
+  .pipeline-filter-field>span{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+  .pipeline-filter-field select{width:100%;}
+  .pipeline-owner-chips{display:flex;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:104px;}
+  .pipeline-owner-chips .chip{flex:0 0 22px;}
+  @media(max-width:720px){.pipeline-filter-field{min-width:100%;}}
 </style>
 """;
 
@@ -21,18 +28,45 @@ namespace IdeioMarketing.MarketingFeature.Content
 <script id="pipeline-visibility-script">
 /* Pipeline görünürlüğü müşteri kaydından bağımsızdır. Eksik alanlar geriye uyumluluk için görünür kabul edilir. */
 const isInPipeline = lead => lead && lead.inPipeline !== false;
+const pipelineOwnersOf = lead => {
+  const ownerValues=Array.isArray(lead?.owners)
+    ? [...lead.owners]
+    : (typeof lead?.owners==="string" ? lead.owners.split(/[|,+]/) : []);
+  if(lead?.owner)ownerValues.push(lead.owner);
+  if(lead?.owner2)ownerValues.push(lead.owner2);
+  return [...new Set(ownerValues.map(owner=>String(owner).trim()).filter(Boolean))];
+};
+const pipelineOwnerChips = lead => pipelineOwnersOf(lead).map(owner=>`<span class="chip" title="${esc(owner)}" aria-label="${esc(owner)}" style="background:${ownerColor(owner)}2A;color:${ownerColor(owner)}">${esc(owner[0]||"?")}</span>`).join("");
+const pipelineFilters = {owner:"all",status:"all",month:"all"};
+const pipelineFilterOwners = () => [...new Set([...OWNERS,...S.leads.filter(isInPipeline).flatMap(pipelineOwnersOf)])].filter(Boolean);
+const pipelineFilterStatuses = () => [...new Set([...STATUS,...S.leads.filter(isInPipeline).map(l=>l.status)])].filter(Boolean);
+const pipelineFilterMonths = () => [...new Set(S.leads.filter(isInPipeline).map(monthKey).filter(Boolean))].sort().reverse();
+const pipelineFilteredLeads = () => S.leads.filter(l =>
+  isInPipeline(l) &&
+  (pipelineFilters.owner === "all" || pipelineOwnersOf(l).includes(pipelineFilters.owner)) &&
+  (pipelineFilters.status === "all" || l.status === pipelineFilters.status) &&
+  (pipelineFilters.month === "all" || monthKey(l) === pipelineFilters.month)
+);
 
 viewPipeline = function(){
+  const filtered=pipelineFilteredLeads();
+  const ownerOpts=`<option value="all">Tüm sorumlular</option>`+pipelineFilterOwners().map(o=>`<option value="${esc(o)}" ${pipelineFilters.owner===o?"selected":""}>${esc(o)}</option>`).join("");
+  const statusOpts=`<option value="all">Tüm statüler</option>`+pipelineFilterStatuses().map(s=>`<option value="${esc(s)}" ${pipelineFilters.status===s?"selected":""}>${esc(s)}</option>`).join("");
+  const monthOpts=`<option value="all">Tüm aylar ve yıllar</option>`+pipelineFilterMonths().map(k=>`<option value="${k}" ${pipelineFilters.month===k?"selected":""}>${monthLabelAny(k)}</option>`).join("");
   const cols=STAGES.map(s=>{
-    const items=S.leads.filter(l=>isInPipeline(l)&&l.stage===s.id);
+    const items=filtered.filter(l=>l.stage===s.id);
     const cards=items.map(l=>`<div class="pcard" draggable="true" data-card="${l.id}">
       <div class="pcard-top"><b>${esc(l.company)}</b><span class="pcard-actions"><button type="button" class="pcard-remove" data-pipeline-remove="${l.id}" title="Pipeline'dan kaldır" aria-label="${esc(l.company)} müşterisini pipeline'dan kaldır">×</button>${ICON.grip}</span></div>
       <div class="pcard-svc">${statusTag(l.status)}${is2026(l)?`<span class="tag" style="background:#ffffff0d;color:var(--body)">${monthLabel(monthKey(l))}</span>`:""}</div>
-      <div class="pcard-foot"><b style="color:${s.color}">${fmtValue(l)}</b><span style="display:flex;gap:3px">${ownerChips(ownersOf(l))}</span></div>
+      <div class="pcard-foot"><b style="color:${s.color}">${fmtValue(l)}</b><span class="pipeline-owner-chips">${pipelineOwnerChips(l)}</span></div>
     </div>`).join("");
     return `<div class="col" data-col="${s.id}"><div class="col-head"><i style="background:${s.color}"></i><b>${s.label}</b><span class="cnt">${items.length}</span></div><div class="col-total">${fmtTRY(sum(items))}</div><div class="col-list">${cards}</div></div>`;
   }).join("");
-  return `<div class="kanban" id="kanban">${cols}</div>`;
+  return `<div class="filters pipeline-filters" aria-label="Pipeline filtreleri">
+    <label class="pipeline-filter-field"><span>Sorumlu</span><select class="flt" id="pipelineOwnerFilter">${ownerOpts}</select></label>
+    <label class="pipeline-filter-field"><span>Statü</span><select class="flt" id="pipelineStatusFilter">${statusOpts}</select></label>
+    <label class="pipeline-filter-field"><span>Ay ve yıl</span><select class="flt" id="pipelineMonthFilter">${monthOpts}</select></label>
+  </div><div class="kanban" id="kanban">${cols}</div>`;
 };
 
 leadRows = function(list){
@@ -76,15 +110,28 @@ openForm = function(lead){
   document.getElementById("ov").onclick=e=>{if(e.target.id==="ov")close();};
   document.getElementById("mclose").onclick=close;document.getElementById("mcancel").onclick=close;
   document.getElementById("f-company").focus();
-  document.getElementById("msave").onclick=()=>{
+  document.getElementById("msave").onclick=async()=>{
     const g=id=>document.getElementById(id).value;
     const company=g("f-company").trim();
     if(!company){document.getElementById("f-company").style.borderColor="#E0544E";return;}
     const owners=[g("f-owner1")]; const o2v=g("f-owner2"); if(o2v&&o2v!==owners[0])owners.push(o2v);
     const obj={id:f.id||uid(),company,contact:g("f-contact"),email:g("f-email"),source:g("f-source"),status:g("f-status"),temp:g("f-temp"),value:Number(g("f-value"))||0,owners,stage:g("f-stage"),date:monthToDate(g("f-date")),note:g("f-note"),inPipeline:lead?isInPipeline(lead):true};
     const i=S.leads.findIndex(l=>l.id===obj.id);
+    const previous=i>=0?S.leads[i]:null;
     if(i>=0)S.leads[i]=obj;else S.leads.unshift(obj);
-    close();commit();
+    const saveButton=document.getElementById("msave");
+    saveButton.disabled=true;saveButton.textContent="Kaydediliyor…";
+    try{
+      await commit();
+      close();
+    }catch(error){
+      if(i>=0)S.leads[i]=previous;else S.leads=S.leads.filter(l=>l.id!==obj.id);
+      saveButton.disabled=false;saveButton.textContent=lead?"Değişiklikleri kaydet":"Fırsatı ekle";
+      let message=document.getElementById("save-error");
+      if(!message){message=document.createElement("div");message.id="save-error";message.style.cssText="color:#E0544E;font-size:13px;margin-right:auto";saveButton.parentElement.prepend(message);}
+      message.textContent="Kayıt veritabanına yazılamadı. Lütfen tekrar deneyin.";
+      console.error("Marketing kaydı veritabanına yazılamadı.",error);
+    }
   };
 };
 
@@ -116,6 +163,12 @@ const baseRenderForPipelineVisibility=render;
 render=function(){
   document.body.classList.toggle("pipeline-list-view",S.view==="leads");
   baseRenderForPipelineVisibility();
+  if(S.view==="pipeline"){
+    document.getElementById("page-sub").textContent=pipelineFilteredLeads().length+" müşteri";
+    document.getElementById("pipelineOwnerFilter").onchange=e=>{pipelineFilters.owner=e.target.value;render();};
+    document.getElementById("pipelineStatusFilter").onchange=e=>{pipelineFilters.status=e.target.value;render();};
+    document.getElementById("pipelineMonthFilter").onchange=e=>{pipelineFilters.month=e.target.value;render();};
+  }
 };
 TITLES.pipeline[1]="Aşamalar arası sürükle-bırak · × ile yalnızca pipeline'dan kaldır";
 </script>

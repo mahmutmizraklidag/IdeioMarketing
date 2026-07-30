@@ -23,6 +23,9 @@ namespace IdeioMarketing.MarketingFeature.Data
 
             modelBuilder.Entity<MarketingLead>(entity =>
             {
+                // Canlı veritabanı kullanıcısında şema değiştirme yetkisi bulunmadığından
+                // pipeline görünürlüğü mevcut Note alanında saklanır.
+                entity.Ignore(x => x.IsInPipeline);
                 entity.Property(x => x.Value).HasColumnType("decimal(18,2)");
                 entity.HasIndex(x => x.ExternalId).IsUnique();
 

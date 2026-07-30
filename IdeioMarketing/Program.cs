@@ -1,4 +1,5 @@
 using IdeioMarketing.Data;
+using IdeioMarketing.MarketingFeature.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -6,12 +7,28 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Visual Studio geliştirme sunucusunda hata loglarının Windows Event Log yetkisine takılmasını önle.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
 builder.Services.AddDbContext<DatabaseContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer"));
+});
+
+var marketingConnectionString = builder.Configuration.GetConnectionString("SqlServer") ?? string.Empty;
+if (!marketingConnectionString.Contains("Encrypt=", StringComparison.OrdinalIgnoreCase))
+{
+    marketingConnectionString = marketingConnectionString.TrimEnd(';') + ";Encrypt=False;";
+}
+
+builder.Services.AddDbContext<MarketingDatabaseContext>(options =>
+{
+    options.UseSqlServer(marketingConnectionString);
 });
 
 
