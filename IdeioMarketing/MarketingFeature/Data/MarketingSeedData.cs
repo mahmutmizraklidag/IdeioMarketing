@@ -13,7 +13,8 @@ namespace IdeioMarketing.MarketingFeature.Data
             new() { Id = 3, Key = "proposal", Label = "Teklif", Color = "#FF7A3C", SortOrder = 3 },
             new() { Id = 4, Key = "negotiation", Label = "Müzakere", Color = "#E6A93C", SortOrder = 4 },
             new() { Id = 5, Key = "won", Label = "Satış Tamamlandı", Color = "#39C07A", SortOrder = 5 },
-            new() { Id = 6, Key = "lost", Label = "Kaybedildi", Color = "#E0544E", SortOrder = 6 }
+            new() { Id = 6, Key = "lost", Label = "Kaybedildi", Color = "#E0544E", SortOrder = 6 },
+            new() { Id = 7, Key = "rejected", Label = "Reddedildi", Color = "#C65F7B", SortOrder = 7 }
         ];
 
         public static MarketingSource[] Sources =>

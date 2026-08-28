@@ -52,8 +52,10 @@ namespace IdeioMarketing.Controllers
                 ? new List<MarketingLeadStoragePayload>()
                 : JsonSerializer.Deserialize<List<MarketingLeadStoragePayload>>(request.Value, JsonOptions) ?? new List<MarketingLeadStoragePayload>();
 
+            await using var transaction = await _context.Database.BeginTransactionAsync();
             await SyncStorageLeads(_context, incoming);
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return Json(new { success = true });
         }
@@ -66,6 +68,11 @@ namespace IdeioMarketing.Controllers
             var temperatures = await context.MarketingLeadTemperatures.ToDictionaryAsync(x => x.Key);
             var sources = await context.MarketingSources.ToDictionaryAsync(x => x.Name);
             var owners = await context.MarketingOwners.ToDictionaryAsync(x => x.Name);
+
+            if (incoming.Any(x => string.Equals(x.Stage?.Trim(), "rejected", StringComparison.OrdinalIgnoreCase)))
+            {
+                await EnsureRejectedStageExists(context, stages);
+            }
 
             var existing = await context.MarketingLeads
                 .Include(x => x.LeadOwners)
@@ -112,7 +119,22 @@ namespace IdeioMarketing.Controllers
                 lead.Value = item.Value;
                 lead.Date = ResolveDate(item.Date);
                 var isInPipeline = MarketingPipelineVisibility.Resolve(item.InPipeline);
-                lead.Note = MarketingPipelineVisibility.EncodeNote(item.Note?.Trim(), isInPipeline);
+                var hasContract = string.Equals(item.Stage?.Trim(), "won", StringComparison.OrdinalIgnoreCase)
+                    && item.HasContract == true;
+                var contractDeferred = string.Equals(item.Stage?.Trim(), "won", StringComparison.OrdinalIgnoreCase)
+                    && !hasContract
+                    && item.ContractDeferred == true;
+                var lossReason = string.Equals(item.Stage?.Trim(), "lost", StringComparison.OrdinalIgnoreCase)
+                    ? item.LossReason
+                    : null;
+                lead.Note = MarketingPipelineVisibility.EncodeNote(
+                    item.Note?.Trim(),
+                    isInPipeline,
+                    hasContract,
+                    item.ContractStartDate,
+                    item.ContractEndDate,
+                    contractDeferred,
+                    lossReason);
                 lead.SortOrder = i + 1;
                 lead.IsInPipeline = isInPipeline;
                 lead.UpdatedAt = now;
@@ -180,6 +202,29 @@ namespace IdeioMarketing.Controllers
             }
         }
 
+        private static async Task EnsureRejectedStageExists(
+            MarketingDatabaseContext context,
+            Dictionary<string, MarketingStage> stages)
+        {
+            if (stages.ContainsKey("rejected"))
+            {
+                return;
+            }
+
+            var seed = MarketingSeedData.Stages.Single(x => x.Key == "rejected");
+            var rejectedStage = new MarketingStage
+            {
+                Key = seed.Key,
+                Label = seed.Label,
+                Color = seed.Color,
+                SortOrder = seed.SortOrder
+            };
+
+            context.MarketingStages.Add(rejectedStage);
+            await context.SaveChangesAsync();
+            stages[rejectedStage.Key] = rejectedStage;
+        }
+
         private static object ToStoragePayload(MarketingLead lead)
         {
             return new
@@ -198,6 +243,19 @@ namespace IdeioMarketing.Controllers
                     .ToList(),
                 stage = lead.Stage.Key,
                 inPipeline = MarketingPipelineVisibility.ResolveFromNote(lead.Note),
+                hasContract = string.Equals(lead.Stage.Key, "won", StringComparison.OrdinalIgnoreCase)
+                    && MarketingPipelineVisibility.ResolveHasContractFromNote(lead.Note),
+                contractStartDate = string.Equals(lead.Stage.Key, "won", StringComparison.OrdinalIgnoreCase)
+                    ? MarketingPipelineVisibility.ResolveContractStartDateFromNote(lead.Note)
+                    : null,
+                contractEndDate = string.Equals(lead.Stage.Key, "won", StringComparison.OrdinalIgnoreCase)
+                    ? MarketingPipelineVisibility.ResolveContractEndDateFromNote(lead.Note)
+                    : null,
+                contractDeferred = string.Equals(lead.Stage.Key, "won", StringComparison.OrdinalIgnoreCase)
+                    && MarketingPipelineVisibility.ResolveContractDeferredFromNote(lead.Note),
+                lossReason = string.Equals(lead.Stage.Key, "lost", StringComparison.OrdinalIgnoreCase)
+                    ? MarketingPipelineVisibility.ResolveLossReasonFromNote(lead.Note)
+                    : null,
                 date = lead.Date.ToString("yyyy-MM-dd"),
                 note = MarketingPipelineVisibility.DecodeNote(lead.Note)
             };
@@ -257,6 +315,11 @@ namespace IdeioMarketing.Controllers
             public List<string>? Owners { get; set; }
             public string? Stage { get; set; }
             public bool? InPipeline { get; set; }
+            public bool? HasContract { get; set; }
+            public string? ContractStartDate { get; set; }
+            public string? ContractEndDate { get; set; }
+            public bool? ContractDeferred { get; set; }
+            public string? LossReason { get; set; }
             public string? Date { get; set; }
             public string? Note { get; set; }
         }

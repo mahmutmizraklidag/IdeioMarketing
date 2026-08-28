@@ -11,6 +11,7 @@
     <Compile Include="..\IdeioMarketing\MarketingFeature\Content\MarketingHtmlTemplate.cs" Link="Source\MarketingHtmlTemplate.cs" />
     <Compile Include="..\IdeioMarketing\MarketingFeature\Content\MarketingMobileNavigationHtmlEnhancement.cs" Link="Source\MarketingMobileNavigationHtmlEnhancement.cs" />
     <Compile Include="..\IdeioMarketing\MarketingFeature\Content\MarketingPipelineHtmlEnhancement.cs" Link="Source\MarketingPipelineHtmlEnhancement.cs" />
+    <Compile Include="..\IdeioMarketing\MarketingFeature\Data\MarketingSeedData.cs" Link="Source\MarketingSeedData.cs" />
     <Compile Include="..\IdeioMarketing\MarketingFeature\Entities\*.cs" Link="Source\Entities\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
